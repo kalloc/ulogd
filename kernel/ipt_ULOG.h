@@ -20,17 +20,17 @@ struct ipt_ulog_info {
 };
 
 typedef struct ulog_packet_msg {
-        unsigned long mark;
-        long timestamp_sec;
-        long timestamp_usec;
-        unsigned int hook;
-        char indev_name[IFNAMSIZ];
-        char outdev_name[IFNAMSIZ];
-        size_t data_len;
+	unsigned long mark;
+	long timestamp_sec;
+	long timestamp_usec;
+	unsigned int hook;
+	char indev_name[IFNAMSIZ];
+	char outdev_name[IFNAMSIZ];
+	size_t data_len;
 	char prefix[30];
 	unsigned char mac_len;
 	unsigned char mac[ULOG_MAC_LEN];
-        unsigned char payload[0];
+	unsigned char payload[0];
 } ulog_packet_msg_t;
 
 #endif /*_IPT_ULOG_H*/
