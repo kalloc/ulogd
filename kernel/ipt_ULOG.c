@@ -5,7 +5,7 @@
  *
  * Released under the terms of the GPL
  *
- * $Id: ipt_ULOG.c,v 1.3 2000/07/31 11:22:25 laforge Exp laforge $
+ * $Id: ipt_ULOG.c,v 1.4 2000/07/31 11:41:06 laforge Exp $
  */
 
 #include <linux/module.h>
@@ -73,7 +73,7 @@ static unsigned int ipt_ulog_target(struct sk_buff **pskb,
 	pm->timestamp_usec = (*pskb)->stamp.tv_usec;
 	pm->mark = (*pskb)->nfmark;
 	pm->hook = hooknum;
-	if (loginfo->prefix)
+	if (loginfo->prefix[0] != '\0')
 		strcpy(pm->prefix, loginfo->prefix);
 
 	if (in && in->hard_header_len > 0
