@@ -30,7 +30,7 @@
  *   Specify, after how many clock ticks (intel: 100 per second) the queue
  * should be flushed even if it is not full yet.
  *
- * $Id: ipt_ULOG.c,v 1.18 2002/04/16 07:33:00 laforge Exp $
+ * $Id: ipt_ULOG.c,v 1.19 2002/07/07 11:15:31 laforge Exp $
  */
 
 #include <linux/module.h>
@@ -321,7 +321,7 @@ static int __init init(void)
 		ulog_buffers[i].timer.data = i;
 	}
 
-	nflognl = netlink_kernel_create(NETLINK_NFLOG, 0);
+	nflognl = netlink_kernel_create(NETLINK_NFLOG, NULL);
 	if (!nflognl)
 		return -ENOMEM;
 
@@ -335,7 +335,7 @@ static int __init init(void)
 
 static void __exit fini(void)
 {
-	struct ulog_buff_t *ub;
+	ulog_buff_t *ub;
 	int i;
 
 	DEBUGP("ipt_ULOG: cleanup_module\n");
