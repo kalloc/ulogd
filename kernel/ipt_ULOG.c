@@ -10,6 +10,7 @@
  *            nlgroup now global (sysctl)
  * 2001/04/19 ulog-queue reworked, now fixed buffer size specified at
  * 	      module loadtime -HW
+ * 2002/07/07 remove broken nflog_rcv() function -HW
  *
  * Released under the terms of the GPL
  *
@@ -29,7 +30,7 @@
  *   Specify, after how many clock ticks (intel: 100 per second) the queue
  * should be flushed even if it is not full yet.
  *
- * $Id: ipt_ULOG.c,v 1.17 2002/04/10 09:21:41 laforge Exp $
+ * $Id: ipt_ULOG.c,v 1.18 2002/04/16 07:33:00 laforge Exp $
  */
 
 #include <linux/module.h>
@@ -126,11 +127,6 @@ static void ulog_timer(unsigned long data)
 	LOCK_BH(&ulog_lock);
 	ulog_send(data);
 	UNLOCK_BH(&ulog_lock);
-}
-
-static void nflog_rcv(struct sock *sk, int len)
-{
-	printk("ipt_ULOG:nflog_rcv() did receive netlink message ?!?\n");
 }
 
 struct sk_buff *ulog_alloc_skb(unsigned int size)
@@ -325,7 +321,7 @@ static int __init init(void)
 		ulog_buffers[i].timer.data = i;
 	}
 
-	nflognl = netlink_kernel_create(NETLINK_NFLOG, nflog_rcv);
+	nflognl = netlink_kernel_create(NETLINK_NFLOG, 0);
 	if (!nflognl)
 		return -ENOMEM;
 
