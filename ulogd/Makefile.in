@@ -1,4 +1,4 @@
-
+RELEASE_DIR:=/tmp
 
 include @top_srcdir@/Rules.make
 CFLAGS+=-I@top_srcdir@/libipulog/include -I@top_srcdir@/include
@@ -39,24 +39,20 @@ distclean: clean
 	rm -f Makefile config.cache config.log config.status Rules.make
 
 .PHONY: distrib
-distrib: check distclean delrelease $(RELEASE_DIR)/ulogd-$(ULOGD_VERSION).tar.bz2 diff md5sums
-
-.PHONY: check
-check:
-	@if echo $(CFLAGS) | egrep -e '-g|-pg' > /dev/null; then echo Remove debugging flags; exit 1; else exit 0; fi
+distrib: distclean delrelease $(RELEASE_DIR)/ulogd-$(ULOGD_VERSION).tar.bz2 diff
 
 .PHONY: delrelease
 delrelease:
 	rm -f $(RELEASE_DIR)/ulogd-$(ULOGD_VERSION).tar.bz2
 
 $(RELEASE_DIR)/ulogd-$(ULOGD_VERSION).tar.bz2:
-	cd .. & ln -sf ulogd ulogd-$(ULOGD_VERSION) && tar cvf - --exclude CVS --exclude .svn ulogd-$(ULOGD_VERSION)/. | bzip2 -9 > $@ && rm ulogd-$(ULOGD_VERSION)
+	cd .. && ln -sf ulogd ulogd-$(ULOGD_VERSION) && tar cvf - --exclude CVS --exclude .svn ulogd-$(ULOGD_VERSION)/. | bzip2 -9 > $@ && rm ulogd-$(ULOGD_VERSION)
 
 .PHONY: diff
 diff: $(RELEASE_DIR)/ulogd-$(ULOGD_VERSION).tar.bz2
 	@mkdir /tmp/diffdir
 	@cd /tmp/diffdir && tar -x --bzip2 -f $(RELEASE_DIR)/ulogd-$(ULOGD_VERSION).tar.bz2
-	@set -e; cd /tmp/diffdir; tar -x --bzip2 -f $(RELEASE_DIR)/ulogd-$(OLD_ULOGD_VERSION).tar.bz2; echo Creating patch-ulogd-$(OLD_ULOGD_VERSION)-$(ULOGD_VERSION).bz2; diff -urN ulogd-$(OLD_ULOGD_VERSION) ulogd-$(ULOGD_VERSION) | bzip2 -9 > $(RELEASE_DIR)/patch-ulogd-$(OLD_ULOGD_VERSION)-$(ULOGD_VERSON).bz2
+	@set -e; cd /tmp/diffdir; tar -x --bzip2 -f $(RELEASE_DIR)/ulogd-$(OLD_ULOGD_VERSION).tar.bz2; echo Creating patch-ulogd-$(OLD_ULOGD_VERSION)-$(ULOGD_VERSION).bz2; diff -urN ulogd-$(OLD_ULOGD_VERSION) ulogd-$(ULOGD_VERSION) | bzip2 -9 > $(RELEASE_DIR)/patch-ulogd-$(OLD_ULOGD_VERSION)-$(ULOGD_VERSION).bz2
 
 recurse: 
 	@for d in $(SUBDIRS); do if ! make -C $$d; then exit 1; fi; done
