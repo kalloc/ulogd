@@ -90,7 +90,9 @@ static int _sqlite3_output(ulog_iret_t *result)
 	struct _field *f;
 	ulog_iret_t *res;
 	int col_counter;
+#ifdef IP_AS_STRING
 	char *ipaddr;
+#endif
 
 	col_counter = 0;
 	for (f = fields; f; f = f->next) {
@@ -342,6 +344,7 @@ static void _sqlite3_fini(void)
 	}
 
 	if (dbh) {
+		int result;
 		/* flush the remaining insert statements to the database. */
 		result = sqlite3_exec(dbh,"commit",NULL,NULL,NULL);
 
@@ -353,16 +356,16 @@ static void _sqlite3_fini(void)
 	}
 }
 
+#define _SQLITE3_BUSY_TIMEOUT 300
+
 static int _sqlite3_init(void)
 {
-	int result = 0;
-
 	/* have the opts parsed */
 	config_parse_file("SQLITE3", &buffer_ce);
 
 	if (_sqlite3_open_db(db_ce.u.string)) {
 		ulogd_log(ULOGD_ERROR, "can't open the database file\n");
-		return;
+		return 1;
 	}
 
 	/* set the timeout so that we don't automatically fail
@@ -372,7 +375,7 @@ static int _sqlite3_init(void)
 	/* read the fieldnames to know which values to insert */
 	if (_sqlite3_get_columns(table_ce.u.string)) {
 		ulogd_log(ULOGD_ERROR, "unable to get sqlite columns\n");
-		return;
+		return 1;
 	}
 
 	/* initialize our buffer size and counter */
@@ -387,17 +390,15 @@ static int _sqlite3_init(void)
 	/* create and prepare the actual insert statement */
 	_sqlite3_createstmt();
 
-	register_output(&_sqlite3_plugin);
+	return 0;
 }
 
 static ulog_output_t _sqlite3_plugin = { 
 	.name = "sqlite3", 
 	.output = &_sqlite3_output, 
 	.init = &_sqlite3_init,
-	.fini = &sqlite3_fini,
+	.fini = &_sqlite3_fini,
 };
-
-#define _SQLITE3_BUSY_TIMEOUT 300
 
 void _init(void) 
 {
