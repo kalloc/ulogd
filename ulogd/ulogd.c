@@ -37,7 +37,7 @@
  * 		- added suppurt for seteuid()
  */
 
-#define ULOGD_VERSION	"1.20"
+#define ULOGD_VERSION	"1.21"
 
 #include <unistd.h>
 #include <stdio.h>
