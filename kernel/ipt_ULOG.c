@@ -21,7 +21,7 @@
  * each nlgroup you are using, so the total kernel memory usage increases
  * by that factor.
  *
- * $Id: ipt_ULOG.c,v 1.10 2001/04/19 17:35:53 laforge Exp $
+ * $Id: ipt_ULOG.c,v 1.11 2001/04/20 01:54:29 laforge Exp $
  */
 
 #include <linux/module.h>
@@ -182,7 +182,7 @@ static unsigned int ipt_ulog_target(struct sk_buff **pskb,
 	pm->mark = (*pskb)->nfmark;
 	pm->hook = hooknum;
 	if (loginfo->prefix[0] != '\0')
-		strcpy(pm->prefix, loginfo->prefix);
+		strncpy(pm->prefix, loginfo->prefix, sizeof(pm->prefix));
 	else
 		*(pm->prefix) = '\0';
 
@@ -194,12 +194,12 @@ static unsigned int ipt_ulog_target(struct sk_buff **pskb,
 	}
 
 	if (in)
-		strcpy(pm->indev_name, in->name);
+		strncpy(pm->indev_name, in->name, sizeof(pm->indev_name));
 	else
 		pm->indev_name[0] = '\0';
 
 	if (out)
-		strcpy(pm->outdev_name, out->name);
+		strncpy(pm->outdev_name, out->name, sizeof(pm->outdev_name));
 	else
 		pm->outdev_name[0] = '\0';
 
