@@ -9,7 +9,7 @@
  *
  * Released under the terms of the GPL
  *
- * $Id: ipt_ULOG.c,v 1.8 2001/01/30 11:54:14 laforge Exp $
+ * $Id: ipt_ULOG.c,v 1.9 2001/02/10 10:17:50 laforge Exp $
  */
 
 #include <linux/module.h>
@@ -25,6 +25,7 @@
 #include <linux/socket.h>
 #include <linux/netfilter_ipv4/ip_tables.h>
 #include <linux/netfilter_ipv4/ipt_ULOG.h>
+#include <linux/netfilter_ipv4/lockhelp.h>
 #include <net/sock.h>
 
 #define ULOG_NL_EVENT	111	/* Harald's favorite number */
@@ -79,7 +80,12 @@ static unsigned int ipt_ulog_target(struct sk_buff **pskb,
 		 * multipart message. WARNING: has to be <= 131000
 		 * due to slab allocator restrictions */
 		nlskb = alloc_skb((max_qthresh * max_size), GFP_ATOMIC);
-	} else if (size > skb_tailroom(nlskb)) {
+		if (!nlskb)
+			printk("ipt_ULOG: unable to allocate %u*%u bytes!\n",
+				max_qthresh, max_size);
+	} 
+
+	if (size > skb_tailroom(nlskb)) {
 		DEBUGP("ipt_ULOG: copy expand %d %d\n", 
 			skb_tailroom(nlskb), size);
 		newskb = skb_copy_expand(nlskb, skb_headroom(nlskb),
@@ -93,11 +99,9 @@ static unsigned int ipt_ulog_target(struct sk_buff **pskb,
 		nlskb = newskb;
 	}
 
-	if (!nlskb)
-		goto nlmsg_failure;
-
 	DEBUGP("ipt_ULOG: qlen %d, qthreshold %d\n", qlen, loginfo->qthreshold);
 
+	/* NLMSG_PUT contains a hidden goto nlmsg_failure !!! */
 	nlh = NLMSG_PUT(nlskb, 0, qlen, ULOG_NL_EVENT, size - sizeof(*nlh));
 	qlen++;
 
@@ -230,7 +234,7 @@ static int __init init(void)
 
 	/* FIXME: does anybody know an easy way to determine the biggest
 	 * MTU of all interfaces in the system ? */
-	max_size = 1500;
+	max_size = NLMSG_SPACE(1514);
 
 	return 0;
 }
