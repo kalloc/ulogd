@@ -1,4 +1,4 @@
-/* ulogd_SYSLOG.c, Version $Revision: 1.15 $
+/* ulogd_SYSLOG.c, Version $Revision$
  *
  * ulogd output target for real syslog() logging
  *
@@ -114,7 +114,7 @@ static int syslog_init(void)
 		syslog_level = LOG_NOTICE;
 	else if (!strcmp(level_ce.u.string, "LOG_INFO"))
 		syslog_level = LOG_INFO;
-	else if (!strcmp(level_ce.u.string, "LOG_DEBUg"))
+	else if (!strcmp(level_ce.u.string, "LOG_DEBUG"))
 		syslog_level = LOG_DEBUG;
 	else {
 		ulogd_log(ULOGD_FATAL, "unknown level '%s'\n",
