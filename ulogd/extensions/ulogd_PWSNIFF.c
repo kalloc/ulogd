@@ -1,4 +1,4 @@
-/* ulogd_PWSNIFF.c, Version $Revision: 1.9 $
+/* ulogd_PWSNIFF.c, Version $Revision$
  *
  * ulogd logging interpreter for POP3 / FTP like plaintext passwords.
  *
@@ -17,7 +17,7 @@
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
- * $Id: ulogd_PWSNIFF.c,v 1.9 2003/08/23 13:02:11 laforge Exp $
+ * $Id$
  *
  */
 
@@ -133,24 +133,31 @@ static ulog_iret_t *_interp_pwsniff(ulog_interpreter_t *ip, ulog_packet_msg_t *p
 }
 
 static ulog_iret_t pwsniff_rets[] = {
-	{ NULL, NULL, 0, ULOGD_RET_STRING, ULOGD_RETF_FREE, "pwsniff.user", 
-		{ ptr: NULL } },
-	{ NULL, NULL, 0, ULOGD_RET_STRING, ULOGD_RETF_FREE, "pwsniff.pass", 
-		{ ptr: NULL } },
+	{ .type = ULOGD_RET_STRING, 
+	  .flags = ULOGD_RETF_FREE, 
+	  .key = "pwsniff.user", 
+	}, 
+	{ .type = ULOGD_RET_STRING, 
+	  .flags = ULOGD_RETF_FREE, 
+	  .key = "pwsniff.pass", 
+	},
 };
-static ulog_interpreter_t base_ip[] = { 
 
-	{ NULL, "pwsniff", 0, &_interp_pwsniff, 2, pwsniff_rets },
+static ulog_interpreter_t base_ip[] = { 
+	{ .name = "pwsniff", 
+	  .interp = &_interp_pwsniff, 
+	  .key_num = 2, 
+	  .result = pwsniff_rets },
 	{ NULL, "", 0, NULL, 0, NULL }, 
 };
-void _base_reg_ip(void)
+
+static void _base_reg_ip(void)
 {
 	ulog_interpreter_t *ip = base_ip;
 	ulog_interpreter_t *p;
 
 	for (p = ip; p->interp; p++)
 		register_interpreter(p);
-
 }
 
 

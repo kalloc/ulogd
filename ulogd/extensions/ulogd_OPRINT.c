@@ -1,4 +1,4 @@
-/* ulogd_MAC.c, Version $Revision: 1.9 $
+/* ulogd_MAC.c, Version $Revision$
  *
  * ulogd output target for logging to a file 
  *
@@ -79,9 +79,12 @@ static int _output_print(ulog_iret_t *res)
 	return 0;
 }
 
-static config_entry_t outf_ce = { NULL, "file", CONFIG_TYPE_STRING, 
-				  CONFIG_OPT_NONE, 0,
-				  { string: ULOGD_OPRINT_DEFAULT } };
+static config_entry_t outf_ce = { 
+	.key = "file", 
+	.type = CONFIG_TYPE_STRING, 
+	.options = CONFIG_OPT_NONE,
+	.u.string = ULOGD_OPRINT_DEFAULT,
+};
 
 static void sighup_handler_print(int signal)
 {
