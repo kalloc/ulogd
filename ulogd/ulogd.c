@@ -757,7 +757,8 @@ int main(int argc, char* argv[])
 		setsid();
 	}
 
-	signal(SIGTERM, &sigterm_handler);
+	/* send SIGINT to the term handler, since they hit CTRL-C */
+	signal(SIGINT, &sigterm_handler);
 	signal(SIGHUP, &sighup_handler);
 
 	ulogd_log(ULOGD_NOTICE, 

@@ -24,6 +24,11 @@ endif
 ULOGD_VERSION=1.10
 OLD_ULOGD_VERSION=1.09
 
+ifeq (x@SQLITE3INCLUDES@,x)
+else
+SUBDIRS+=sqlite3
+endif
+
 #  Normally You should not need to change anything below
 
 all: recurse ulogd

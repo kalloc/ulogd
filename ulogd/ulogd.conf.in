@@ -1,5 +1,5 @@
 # Example configuration for ulogd
-# $Id: ulogd.conf.in,v 1.2 2003/05/04 10:00:10 laforge Exp $
+# $Id$
 #
 
 [global]
@@ -45,6 +45,7 @@ plugin="@libdir@/ulogd_LOGEMU.so"
 #plugin="@libdir@/ulogd_OPRINT.so"
 #plugin="@libdir@/ulogd_MYSQL.so"
 #plugin="@libdir@/ulogd_PGSQL.so"
+#plugin="@libdir@/ulogd_SQLITE3.so"
 #plugin="@libdir@/ulogd_PCAP.so"
 
 
@@ -68,6 +69,11 @@ pass="changeme"
 user="postgres"
 db="ulogd"
 host="localhost"
+
+[SQLITE3]
+table="ulog"
+db="/path/to/sqlite/db"
+buffer=200
 
 [PCAP]
 file="/var/log/ulogd.pcap"

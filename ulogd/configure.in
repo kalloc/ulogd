@@ -195,6 +195,75 @@ AC_ARG_WITH(pgsql-log-ip-as-string,
 ])
 
 
+dnl
+dnl test for sqlite3
+dnl
+AC_ARG_WITH(sqlite3,
+ --with-sqlite3=<directory>		sqlite3 installed in <directoty>,[
+if test $withval != yes
+then
+        dir=$withval
+else
+        dir="/usr/local"
+fi
+mysqldir=""
+AC_MSG_CHECKING(for sqlite3 files)
+for d in $dir /usr /usr/local /usr/local/sqlite3
+do
+        if test -f $d/lib/sqlite3/libsqlite3.so
+        then
+                AC_MSG_RESULT(found sqlite3 in $d)
+                sqlite3dir=$d
+                sqlite3dir_suffix=/sqlite3
+                break
+        elif test -f $d/lib/libsqlite3.so
+        then
+                AC_MSG_RESULT(found sqlite in $d)
+                sqlite3dir=$d
+                sqlite3dir_suffix=
+                break
+        fi
+done
+
+if test x$sqlite3dir = x
+then
+        AC_MSG_WARN(sqlite3 backend not used)
+else
+        AC_DEFINE(HAVE_SQLITE3)
+        SQLITE3INCLUDES=${sqlite3dir}/include${sqlite3dir_suffix}
+        SQLITE3LIBS=${sqlite3dir}/lib${sqlite3dir_suffix}
+
+	DATABASE_DIR="${DATABASE_DIR} sqlite3"
+
+	SQLITE3_LIB="${DATABASE_LIB} -lsqlite3 " 
+	DATABASE_LIB_DIR="${DATABASE_LIB_DIR} -L${SQLITE3LIBS} "
+
+dnl	DATABASE_DRIVERS="${DATABASE_DRIVERS} ../sqlite3/mysql_driver.o "
+
+	DB_DEF="${DB_DEF} -DHAVE_SQLITE3 "
+
+
+	AC_SUBST(SQLITE3INCLUDES)
+	AC_SUBST(SQLITE3_LIB)
+
+fi      
+])      
+
+
+dnl
+dnl Check whether the user wants log IP-addresses as strings rather
+dnl than as unsigned long-integers to his sqlite3-database. Since this
+dnl feature is only used in ulogd_SQLITE3.c, there are no checks in any
+dnl way.
+dnl
+
+AC_ARG_WITH(sqlite3-log-ip-as-string,
+ --with-sqlite3-log-ip-as-string		log IPs as string rather than as
+						unsigned long-integer.
+,[
+   EXTRA_SQLITE3_DEF="-D${EXTRA_SQLITE3_DEF} -DIP_AS_STRING=1"
+   AC_MSG_WARN(the use of --with-sqlite3-log-ip-as-string is discouraged)
+])
 
 
 AC_SUBST(DATABASE_DIR)
@@ -203,11 +272,13 @@ AC_SUBST(DATABASE_LIB_DIR)
 AC_SUBST(DB_DEF)
 AC_SUBST(EXTRA_MYSQL_DEF)
 AC_SUBST(EXTRA_PGSQL_DEF)
+AC_SUBST(EXTRA_SQLITE3_DEF)
 
 AC_SUBST(DATABASE_DRIVERS)
 AC_SUBST(HAVE_PCAP_H)
 
 AM_CONDITIONAL(HAVE_MYSQL, test x$mysqldir != x)
 AM_CONDITIONAL(HAVE_PGSQL, test x$pgsqldir != x)
+AM_CONDITIONAL(HAVE_SQLITE3, test x$sqlite3dir != x)
 
-AC_OUTPUT(extensions/Makefile doc/Makefile conffile/Makefile libipulog/Makefile mysql/Makefile pgsql/Makefile pcap/Makefile Makefile Rules.make)
+AC_OUTPUT(extensions/Makefile doc/Makefile conffile/Makefile libipulog/Makefile mysql/Makefile pgsql/Makefile sqlite3/Makefile pcap/Makefile Makefile Rules.make)
