@@ -1,3 +1,7 @@
+Version 1.22 (2005-03-07)
+- Fix postgresql endless loop (Jani Averbach)
+- Add postgrsql schema support (Bob Hockney)
+
 Version 1.21 (2005-02-16)
 - Fix compilation on certain gcc versions (Roberto Nibali)
 - Fix --log-ip-as-string for mysql, pgsql and sqlite3 (Jani Averbach)
