@@ -35,6 +35,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <arpa/inet.h>
 #include <ulogd/ulogd.h>
 #include <ulogd/conffile.h>
 #include <mysql/mysql.h>
@@ -114,6 +115,7 @@ static int mysql_output(ulog_iret_t *result)
 	ulog_iret_t *res;
 #ifdef IP_AS_STRING
 	char *tmpstr;		/* need this for --log-ip-as-string */
+	struct in_addr addr;
 #endif
 
 	stmt_ins = stmt_val;
@@ -154,8 +156,10 @@ static int mysql_output(ulog_iret_t *result)
 				break;
 			case ULOGD_RET_IPADDR:
 #ifdef IP_AS_STRING
+				memset(&addr, 0, sizeof(addr0));
+				addr.s_addr = ntohl(res->value.ui32);
 				*stmt_ins++ = '\'';
-				tmpstr = inet_ntoa(ntohl(res->value.ui32));
+				tmpstr = inet_ntoa(addr);
 #ifdef OLD_MYSQL
 				mysql_escape_string(stmt_ins, tmpstr,
 						    strlen(tmpstr));

@@ -29,6 +29,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <arpa/inet.h>
 #include <ulogd/ulogd.h>
 #include <ulogd/conffile.h>
 #include <sqlite3.h>
@@ -92,6 +93,7 @@ static int _sqlite3_output(ulog_iret_t *result)
 	int col_counter;
 #ifdef IP_AS_STRING
 	char *ipaddr;
+	struct in_addr *addr;
 #endif
 
 	col_counter = 0;
@@ -130,7 +132,9 @@ static int _sqlite3_output(ulog_iret_t *result)
 				break;
 			case ULOGD_RET_IPADDR:
 #ifdef IP_AS_STRING
-				ipaddr = inet_ntoa(ntohl(res->value.ui32));
+				memset(&addr, 0, sizeof(addr));
+				addr.s_addr = ntohl(res->value.ui32);
+				ipaddr = inet_ntoa(addr);
 				sqlite3_bind_text(p_stmt,col_counter,ipaddr,strlen(ipaddr),SQLITE_STATIC);
                                 break;
 #endif /* IP_AS_STRING */

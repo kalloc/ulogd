@@ -12,6 +12,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <arpa/inet.h>
 #include <ulogd/ulogd.h>
 #include <ulogd/conffile.h>
 #include <libpq-fe.h>
@@ -94,6 +95,7 @@ static int pgsql_output(ulog_iret_t *result)
 	PGresult   *pgres;
 #ifdef IP_AS_STRING
 	char *tmpstr;		/* need this for --log-ip-as-string */
+	struct in_addr addr;
 #endif
 
 	stmt_ins = stmt_val;
@@ -135,7 +137,9 @@ static int pgsql_output(ulog_iret_t *result)
 			case ULOGD_RET_IPADDR:
 #ifdef IP_AS_STRING
 				*stmt_ins++ = '\'';
-				tmpstr = (char *)inet_ntoa(ntohl(res->value.ui32));
+				memset(&addr, 0, sizeof(addr));
+				addr.s_addr = ntohl(res->value.ui32);
+				tmpstr = (char *)inet_ntoa(addr);
 				PQescapeString(stmt_ins,tmpstr,strlen(tmpstr)); 
 				stmt_ins = stmt + strlen(stmt);
 				sprintf(stmt_ins, "',");
