@@ -1,13 +1,13 @@
-/* ulog_test, $Revision: 1.4 $
+/* ulog_test, $Revision$
  *
  * small testing program for libipulog, part of the netfilter ULOG target
  * for the linux 2.4 netfilter subsystem.
  *
- * (C) 2000 by Harald Welte <laforge@gnumonks.org>
+ * (C) 2000-2005 by Harald Welte <laforge@gnumonks.org>
  *
  * this code is released under the terms of GNU GPL
  *
- * $Id: ulog_test.c,v 1.4 2001/01/30 09:28:04 laforge Exp $
+ * $Id$
  */
 
 #include <stdio.h>
@@ -55,7 +55,7 @@ int main(int argc, char *argv[])
 	buf = (unsigned char *) malloc(MYBUFSIZ);
 	
 	/* create ipulog handle */
-	h = ipulog_create_handle(ipulog_group2gmask(atoi(argv[2])));
+	h = ipulog_create_handle(ipulog_group2gmask(atoi(argv[2])),150000);
 	if (!h)
 	{
 		/* if some error occurrs, print it to stderr */
