@@ -4,7 +4,7 @@
  *
  * This software is released under the terms of GNU GPL
  * 
- * $Id: libipt_ULOG.c,v 1.1 2000/07/31 09:10:11 laforge Exp laforge $
+ * $Id: libipt_ULOG.c,v 1.2 2000/07/31 11:50:12 laforge Exp laforge $
  */
 #include <stdio.h>
 #include <netdb.h>
@@ -117,6 +117,7 @@ static int parse(int c, char **argv, int invert, unsigned int *flags,
 			exit_error(PARAMETER_PROBLEM,
 				   "Negative copy range?");
 		loginfo->copy_range = atoi(optarg);
+		*flags |= IPT_LOG_OPT_CPRANGE;
 		break;
 	}
 	return 1;
