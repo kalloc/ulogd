@@ -241,12 +241,14 @@ static int pgsql_createstmt(void)
 	return 0;
 }
 
+#define PGSQL_GETCOLUMN_TEMPLATE "SELECT  a.attname FROM pg_class c, pg_attribute a WHERE c.relname ='%s' AND a.attnum>0 AND a.attrelid=c.oid ORDER BY a.attnum
+
 /* find out which columns the table has */
 static int pgsql_get_columns(const char *table)
 {
 	PGresult *result;
 	char buf[ULOGD_MAX_KEYLEN];
-	char pgbuf[256];
+	char pgbuf[strlen(PGSQL_GETCOLUMN_TEMPLATE)+strlen(table)+1];
 	char *underscore;
 	struct _field *f;
 	int id;
@@ -255,9 +257,7 @@ static int pgsql_get_columns(const char *table)
 	if (!dbh)
 		return 1;
 
-	strcpy(pgbuf, "SELECT  a.attname FROM pg_class c, pg_attribute a WHERE c.relname ='");
-	strncat(pgbuf, table, strlen(table));
-	strcat(pgbuf, "' AND a.attnum>0 AND a.attrelid=c.oid ORDER BY a.attnum");
+	snprintf(pgbuf, sizeof(pgbuf)-1, "SELECT  a.attname FROM pg_class c, pg_attribute a WHERE c.relname ='%s' AND a.attnum>0 AND a.attrelid=c.oid ORDER BY a.attnum", table);
 	ulogd_log(ULOGD_DEBUG, pgbuf);
 
 	result = PQexec(dbh, pgbuf);
