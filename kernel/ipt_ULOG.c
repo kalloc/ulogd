@@ -1,11 +1,11 @@
-/* 
+/*
  * netfilter module for userspace packet logging daemons
  *
  * (C) 2000 by Harald Welte <laforge@sunbeam.franken.de>
- * 
+ *
  * Released under the terms of the GPL
  *
- * $Id: ipt_ULOG.c,v 1.1 2000/07/31 09:08:10 laforge Exp laforge $
+ * $Id$
  */
 
 #include <linux/module.h>
@@ -17,19 +17,20 @@
 #include <linux/netlink.h>
 #include <linux/netdevice.h>
 #include <linux/mm.h>
+#include <linux/socket.h>
 #include <linux/netfilter_ipv4/ip_tables.h>
 #include <linux/netfilter_ipv4/ipt_ULOG.h>
+#include <net/sock.h>
 
-#define NETLINK_NFLOG 	25
-#define ULOG_NL_EVENT	111
+#define ULOG_NL_EVENT	111	/* Harald's favorite number */
 
-#if 1
+#if 0
 #define DEBUGP	printk
 #else
-#define DEBUGP(format, args ...)
+#define DEBUGP(format, args...)
 #endif
 
-struct sock *nflognl;
+static struct sock *nflognl;
 
 static void nflog_rcv(struct sock *sk, int len)
 {
@@ -43,15 +44,20 @@ static unsigned int ipt_ulog_target(struct sk_buff **pskb,
 				    const void *targinfo, void *userinfo)
 {
 	ulog_packet_msg_t *pm;
-	size_t size;
+	size_t size, copy_len;
 	struct sk_buff *nlskb;
 	unsigned char *old_tail;
 	struct nlmsghdr *nlh;
 	struct ipt_ulog_info *loginfo = (struct ipt_ulog_info *) targinfo;
 
 	/* calculate the size of the skb needed */
-
-	size = NLMSG_SPACE(sizeof(*pm) + (*pskb)->len);
+	if ((loginfo->copy_range == 0) ||
+	    (loginfo->copy_range > (*pskb)->len)) {
+		copy_len = (*pskb)->len;
+	} else {
+		copy_len = loginfo->copy_range;
+	}
+	size = NLMSG_SPACE(sizeof(*pm) + copy_len);
 	nlskb = alloc_skb(size, GFP_ATOMIC);
 	if (!nlskb)
 		goto nlmsg_failure;
@@ -62,7 +68,7 @@ static unsigned int ipt_ulog_target(struct sk_buff **pskb,
 
 	/* copy hook, prefix, timestamp, payload, etc. */
 
-	pm->data_len = (*pskb)->len;
+	pm->data_len = copy_len;
 	pm->timestamp_sec = (*pskb)->stamp.tv_sec;
 	pm->timestamp_usec = (*pskb)->stamp.tv_usec;
 	pm->mark = (*pskb)->nfmark;
@@ -70,25 +76,29 @@ static unsigned int ipt_ulog_target(struct sk_buff **pskb,
 	if (loginfo->prefix)
 		strcpy(pm->prefix, loginfo->prefix);
 
-	if (in && !out) {
-		if ((*pskb)->dev && (*pskb)->dev->hard_header_len > 0
-		    && (*pskb)->dev->hard_header_len <= ULOG_MAC_LEN) {
-			memcpy(pm->mac, (*pskb)->mac.raw,
-			       (*pskb)->dev->hard_header_len);
-			pm->mac_len = (*pskb)->dev->hard_header_len;
-		}
-
+	if (in && in->hard_header_len > 0
+	    && (*pskb)->mac.raw != (void *) (*pskb)->nh.iph
+	    && in->hard_header_len <= ULOG_MAC_LEN) {
+		memcpy(pm->mac, (*pskb)->mac.raw, in->hard_header_len);
+		pm->mac_len = in->hard_header_len;
 	}
-/*
-	if (in) strcpy(pm->indev_name, in->name);
-	else pm->indev_name[0] = '\0';
-*/
-	if ((*pskb)->len)
-		memcpy(pm->payload, (*pskb)->data, (*pskb)->len);
+
+	if (in)
+		strcpy(pm->indev_name, in->name);
+	else
+		pm->indev_name[0] = '\0';
+
+	if (out)
+		strcpy(pm->outdev_name, out->name);
+	else
+		pm->outdev_name[0] = '\0';
+
+	if (copy_len)
+		memcpy(pm->payload, (*pskb)->data, copy_len);
 	nlh->nlmsg_len = nlskb->tail - old_tail;
 	NETLINK_CB(nlskb).dst_groups = loginfo->nl_group;
 	DEBUGP
-	    ("ipt_ULOG: going to throw out a packet to netlink groupmask %u\n",
+	    ("ipt_ULOG: going to throw a packet to netlink groupmask %u\n",
 	     loginfo->nl_group);
 	netlink_broadcast(nflognl, nlskb, 0, loginfo->nl_group,
 			  GFP_ATOMIC);
@@ -100,7 +110,6 @@ static unsigned int ipt_ulog_target(struct sk_buff **pskb,
 		kfree(nlskb);
 	printk("ipt_ULOG: Error building netlink message\n");
 	return IPT_CONTINUE;
-
 }
 
 static int ipt_ulog_checkentry(const char *tablename,
@@ -109,9 +118,21 @@ static int ipt_ulog_checkentry(const char *tablename,
 			       unsigned int targinfosize,
 			       unsigned int hookmask)
 {
+	struct ipt_ulog_info *loginfo = (struct ipt_ulog_info *) targinfo;
+
+	if (targinfosize != IPT_ALIGN(sizeof(struct ipt_ulog_info))) {
+		DEBUGP("ULOG: targinfosize %u != 0\n", targinfosize);
+		return 0;
+	}
+
+	if (loginfo->prefix[sizeof(loginfo->prefix) - 1] != '\0') {
+		DEBUGP("ULOG: prefix term %i\n",
+		       loginfo->prefix[sizeof(loginfo->prefix) - 1]);
+		return 0;
+	}
+
 	return 1;
 }
-
 
 static struct ipt_target ipt_ulog_reg =
     { {NULL, NULL}, "ULOG", ipt_ulog_target, ipt_ulog_checkentry, NULL,
@@ -122,8 +143,13 @@ static int __init init(void)
 {
 	DEBUGP("ipt_ULOG: init module\n");
 	nflognl = netlink_kernel_create(NETLINK_NFLOG, nflog_rcv);
-	if (ipt_register_target(&ipt_ulog_reg))
+	if (!nflognl)
+		return -ENOMEM;
+
+	if (ipt_register_target(&ipt_ulog_reg) != 0) {
+		sock_release((struct socket *) nflognl->socket);
 		return -EINVAL;
+	}
 
 	return 0;
 }
@@ -131,7 +157,9 @@ static int __init init(void)
 static void __exit fini(void)
 {
 	DEBUGP("ipt_ULOG: cleanup_module\n");
+
 	ipt_unregister_target(&ipt_ulog_reg);
+	sock_release((struct socket *) nflognl->socket);
 }
 
 module_init(init);
