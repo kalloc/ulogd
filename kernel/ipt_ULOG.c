@@ -9,7 +9,7 @@
  *
  * Released under the terms of the GPL
  *
- * $Id: ipt_ULOG.c,v 1.6 2000/09/22 06:57:16 laforge Exp $
+ * $Id: ipt_ULOG.c,v 1.7 2001/01/30 09:27:31 laforge Exp $
  */
 
 #include <linux/module.h>
@@ -112,6 +112,8 @@ static unsigned int ipt_ulog_target(struct sk_buff **pskb,
 	pm->hook = hooknum;
 	if (loginfo->prefix[0] != '\0')
 		strcpy(pm->prefix, loginfo->prefix);
+	else
+		*(pm->prefix) = '\0';
 
 	if (in && in->hard_header_len > 0
 	    && (*pskb)->mac.raw != (void *) (*pskb)->nh.iph
