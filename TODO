@@ -1,14 +1,20 @@
 libipulog:
+X handle multi-part nlmsgs
 - Error checking at netlink socket
 - forward port my timeout enabled read-function from libipq to libipulog
-- handle multi-part nlmsgs
+- man pages
 
 kernel:
-- queue the logging in the kernel and send multiple packets in one 
+X queue the logging in the kernel and send multiple packets in one 
   multipart nlmsg
+- IPv6 ULOG target
 
 ulogd:
+X MYSQL output plugin
+X syslog compatibility output plugin
 - commandline option for "to fork or not to fork"
-- add output target for sql server
-- add a compatibility output target for syslog (really?)
+- various command line options (we don't even have --version)
 - add support for capabilities to run as non-root
+- big endian fixes
+- man pages
+- IPv6 support (core and extensions)
