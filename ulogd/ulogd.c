@@ -760,6 +760,7 @@ int main(int argc, char* argv[])
 	/* send SIGINT to the term handler, since they hit CTRL-C */
 	signal(SIGINT, &sigterm_handler);
 	signal(SIGHUP, &sighup_handler);
+	signal(SIGTERM, &sigterm_handler);
 
 	ulogd_log(ULOGD_NOTICE, 
 		  "initialization finished, entering main loop\n");
