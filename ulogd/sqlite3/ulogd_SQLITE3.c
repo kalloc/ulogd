@@ -93,7 +93,7 @@ static int _sqlite3_output(ulog_iret_t *result)
 	int col_counter;
 #ifdef IP_AS_STRING
 	char *ipaddr;
-	struct in_addr *addr;
+	struct in_addr addr;
 #endif
 
 	col_counter = 0;

@@ -101,7 +101,7 @@ else
 
 	if test "x$MYSQL_FUNCTION_TEST" = x
 	then
-                EXTRA_MYSQL_DEF="OLD_MYSQL=1 "
+                EXTRA_MYSQL_DEF="-DOLD_MYSQL=1 "
                 AC_MSG_RESULT(found old MySQL)
 	else
 		AC_MSG_RESULT(found new MySQL)
@@ -122,7 +122,7 @@ AC_ARG_WITH(mysql-log-ip-as-string,
  --with-mysql-log-ip-as-string		log IPs as string rather than as
 					unsigned long-integer.
 ,[
-   EXTRA_MYSQL_DEF="-D${EXTRA_MYSQL_DEF} -DIP_AS_STRING=1"
+   EXTRA_MYSQL_DEF="${EXTRA_MYSQL_DEF} -DIP_AS_STRING=1"
    AC_MSG_WARN(the use of --with-mysql-log-ip-as-string is discouraged)
 ])
 
@@ -261,7 +261,7 @@ AC_ARG_WITH(sqlite3-log-ip-as-string,
  --with-sqlite3-log-ip-as-string		log IPs as string rather than as
 						unsigned long-integer.
 ,[
-   EXTRA_SQLITE3_DEF="-D${EXTRA_SQLITE3_DEF} -DIP_AS_STRING=1"
+   EXTRA_SQLITE3_DEF="${EXTRA_SQLITE3_DEF} -DIP_AS_STRING=1"
    AC_MSG_WARN(the use of --with-sqlite3-log-ip-as-string is discouraged)
 ])
 

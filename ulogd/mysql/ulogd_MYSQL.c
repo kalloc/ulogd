@@ -156,7 +156,7 @@ static int mysql_output(ulog_iret_t *result)
 				break;
 			case ULOGD_RET_IPADDR:
 #ifdef IP_AS_STRING
-				memset(&addr, 0, sizeof(addr0));
+				memset(&addr, 0, sizeof(addr));
 				addr.s_addr = ntohl(res->value.ui32);
 				*stmt_ins++ = '\'';
 				tmpstr = inet_ntoa(addr);
