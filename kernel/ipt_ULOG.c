@@ -29,7 +29,7 @@
  *   Specify, after how many clock ticks (intel: 100 per second) the queue
  * should be flushed even if it is not full yet.
  *
- * $Id: ipt_ULOG.c,v 1.14 2002/01/18 21:22:23 laforge Exp $
+ * $Id: ipt_ULOG.c,v 1.15 2002/01/18 21:33:19 laforge Exp $
  */
 
 #include <linux/module.h>
@@ -61,7 +61,7 @@ MODULE_LICENSE("GPL");
 #define DEBUGP(format, args...)
 #endif
 
-#define PRINTR(format, args...) do { if (net_ratelimit()) printk(format, ## args); } while (0);
+#define PRINTR(format, args...) do { if (net_ratelimit()) printk(format, ## args); } while (0)
 
 MODULE_AUTHOR("Harald Welte <laforge@gnumonks.org>");
 MODULE_DESCRIPTION("IP tables userspace logging module");
