@@ -81,7 +81,7 @@ static config_entry_t table_ce = {
 };
 
 static config_entry_t port_ce = {
-	.next = &port_ce,
+	.next = &table_ce,
 	.key = "port",
 	.type = CONFIG_TYPE_INT,
 	.options = CONFIG_OPT_NONE,
