@@ -2,11 +2,12 @@
  * 
  * (C) 2000 by Harald Welte <laforge@gnumonks.org>
  *
- * in-kernel queue by Sebastian Zander <zander@fokus.gmd.de>
+ * multipart netlink support based on ideas by Sebastian Zander 
+ * 						<zander@fokus.gmd.de>
  *
  * This software is released under the terms of GNU GPL
  * 
- * $Id: libipt_ULOG.c,v 1.5 2001/01/30 09:30:11 laforge Exp $
+ * $Id: libipt_ULOG.c,v 1.6 2001/01/30 11:17:26 laforge Exp $
  */
 #include <stdio.h>
 #include <netdb.h>
@@ -19,7 +20,7 @@
 #include <linux/netfilter_ipv4/ipt_ULOG.h>
 
 #define ULOG_DEFAULT_NLGROUP 1
-#define ULOG_DEFAULT_QTHRESHOLD 10
+#define ULOG_DEFAULT_QTHRESHOLD 1
 
 
 void print_groups(unsigned int gmask)
