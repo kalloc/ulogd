@@ -6,6 +6,8 @@
  * 2000/09/22 ulog-cprange feature added
  * 2001/01/04 in-kernel queue as proposed by Sebastian Zander 
  * 						<zander@fokus.gmd.de>
+ * 2001/01/30 per-rule nlgroup conflicts with global queue. 
+ *            nlgroup now global (sysctl)
  * 2001/04/19 ulog-queue reworked, now fixed buffer size specified at
  * 	      module loadtime -HW
  *
@@ -21,7 +23,7 @@
  * each nlgroup you are using, so the total kernel memory usage increases
  * by that factor.
  *
- * $Id: ipt_ULOG.c,v 1.11 2001/04/20 01:54:29 laforge Exp $
+ * $Id: ipt_ULOG.c,v 1.12 2001/09/01 11:57:33 laforge Exp $
  */
 
 #include <linux/module.h>
@@ -71,7 +73,28 @@ typedef struct {
 static ulog_buff_t ulog_buffers[ULOG_MAXNLGROUPS];	/* array of buffers */
 
 static struct sock *nflognl;	/* our socket */
+static struct sk_buff *nlskb;	/* the skb containing the nlmsg */
+static size_t qlen;		/* current length of multipart-nlmsg */
+static size_t max_size;		/* maximum gross size of one packet */
+static size_t max_qthresh;	/* maximum queue threshold of all rules */
 DECLARE_LOCK(ulog_lock);	/* spinlock */
+
+/* timer function to flush queue in ULOG_FLUSH_INTERVAL time */
+static void ulog_timer(void)
+{
+
+}
+
+static void ulog_send()
+{
+	NETLINK_CB(nlskb).dst_groups = loginfo->nl_group;
+	DEBUGP("ipt_ULOG: sending %d packets to netlink mask %u\n",
+		qlen, loginfo->nl_group);
+	netlink_broadcast(nflognl, nlskb, 0, loginfo->nl_group,
+			  GFP_ATOMIC);
+	qlen = 0;
+	nlskb = NULL;
+}
 
 static void nflog_rcv(struct sock *sk, int len)
 {
@@ -209,6 +232,12 @@ static unsigned int ipt_ulog_target(struct sk_buff **pskb,
 	/* check if we are building multi-part messages */
 	if (ub->qlen > 1) {
 		ub->lastnlh->nlmsg_flags |= NLM_F_MULTI;
+	}
+
+	/* if threshold is reached, send message to userspace */
+	if (qlen >= loginfo->qthreshold) {
+		if (loginfo->qthreshold > 1)
+			nlh->nlmsg_type = NLMSG_DONE;
 	}
 
 	ub->lastnlh = nlh;
