@@ -5,7 +5,7 @@
  *
  * Released under the terms of the GPL
  *
- * $Id$
+ * $Id: ipt_ULOG.c,v 1.3 2000/07/31 11:22:25 laforge Exp laforge $
  */
 
 #include <linux/module.h>
@@ -147,7 +147,7 @@ static int __init init(void)
 		return -ENOMEM;
 
 	if (ipt_register_target(&ipt_ulog_reg) != 0) {
-		sock_release((struct socket *) nflognl->socket);
+		sock_release(nflognl->socket);
 		return -EINVAL;
 	}
 
@@ -159,7 +159,7 @@ static void __exit fini(void)
 	DEBUGP("ipt_ULOG: cleanup_module\n");
 
 	ipt_unregister_target(&ipt_ulog_reg);
-	sock_release((struct socket *) nflognl->socket);
+	sock_release(nflognl->socket);
 }
 
 module_init(init);
