@@ -6,10 +6,22 @@
  * 2000/09/22 ulog-cprange feature added
  * 2001/01/04 in-kernel queue as proposed by Sebastian Zander 
  * 						<zander@fokus.gmd.de>
+ * 2001/04/19 ulog-queue reworked, now fixed buffer size specified at
+ * 	      module loadtime -HW
  *
  * Released under the terms of the GPL
  *
- * $Id: ipt_ULOG.c,v 1.9 2001/02/10 10:17:50 laforge Exp $
+ * This module accepts only one parameter: "nlbufsiz"
+ * The parameter specifies how big the buffer for each netlink multicast
+ * group is. e.g. If you say nlbufsiz=8192, up to eight kb of packets will
+ * get accumulated in the kernel until they are sent to userspace. It is
+ * NOT possible to allocate more than 128kB, and it is strongly discouraged,
+ * because atomically allocating 128kB inside the network rx softirq is not
+ * reliable. Please also keep in mind that this buffer size is allocated for
+ * each nlgroup you are using, so the total kernel memory usage increases
+ * by that factor.
+ *
+ * $Id: ipt_ULOG.c,v 1.10 2001/04/19 17:35:53 laforge Exp $
  */
 
 #include <linux/module.h>
@@ -28,23 +40,37 @@
 #include <linux/netfilter_ipv4/lockhelp.h>
 #include <net/sock.h>
 
-#define ULOG_NL_EVENT	111	/* Harald's favorite number */
-#define ULOG_SLAB_MAX	100000	/* from mm/slab.c: 131072 */
+#define ULOG_NL_EVENT		111		/* Harald's favorite number */
+#define ULOG_MAXNLGROUPS	32		/* numer of nlgroups */
 
 #if 0
-#define DEBUGP	printk
+#define DEBUGP(format, args...)	printk(__FILE__ ":" __FUNCTION__ ":" \
+				       format, ## args)
 #else
 #define DEBUGP(format, args...)
 #endif
 
+#define PRINTR(format, args...) do { if (net_ratelimit()) printk(format, ## args); } while (0);
+
 MODULE_AUTHOR("Harald Welte <laforge@gnumonks.org>");
 MODULE_DESCRIPTION("IP tables userspace logging module");
 
+
+static int nlbufsiz = 4096;
+MODULE_PARM(nlbufsiz, "i");
+MODULE_PARM_DESC(nlbufsiz, "netlink buffer size");
+
+/* global data structures */
+
+typedef struct {
+	unsigned int qlen;		/* number of nlmsgs' in the skb */
+	struct nlmsghdr *lastnlh;	/* netlink header of last msg in skb */
+	struct sk_buff *skb;		/* the pre-allocated skb */
+} ulog_buff_t;
+
+static ulog_buff_t ulog_buffers[ULOG_MAXNLGROUPS];	/* array of buffers */
+
 static struct sock *nflognl;	/* our socket */
-static struct sk_buff *nlskb;	/* the skb containing the nlmsg */
-static size_t qlen;		/* current length of multipart-nlmsg */
-static size_t max_size;		/* maximum gross size of one packet */
-static size_t max_qthresh;	/* maximum queue threshold of all rules */
 DECLARE_LOCK(ulog_lock);	/* spinlock */
 
 static void nflog_rcv(struct sock *sk, int len)
@@ -52,15 +78,62 @@ static void nflog_rcv(struct sock *sk, int len)
 	printk("ipt_ULOG:nflog_rcv() did receive netlink message ?!?\n");
 }
 
+struct sk_buff *ulog_alloc_skb(unsigned int size)
+{
+	struct sk_buff *skb;
+
+	/* alloc skb which should be big enough for a whole
+	 * multipart message. WARNING: has to be <= 131000
+	 * due to slab allocator restrictions */
+
+	skb = alloc_skb(nlbufsiz, GFP_ATOMIC);
+	if (!skb) {
+		PRINTR("ipt_ULOG: can't alloc whole buffer %ub!\n",
+			nlbufsiz);
+
+		/* try to allocate only as much as we need for 
+		 * current packet */
+
+		skb = alloc_skb(size, GFP_ATOMIC);
+		if (!skb)
+			PRINTR("ipt_ULOG: can't even allocate %ub\n", size);
+	}
+
+	return skb;
+}
+
+/* send one ulog_buff_t to userspace */
+static void ulog_send(unsigned int nlgroup)
+{
+	ulog_buff_t *ub;
+
+	ub = &ulog_buffers[nlgroup];
+
+	/* last nlmsg needs NLMSG_DONE */
+	if (ub->qlen > 1)
+		ub->lastnlh->nlmsg_type = NLMSG_DONE;
+
+	NETLINK_CB(ub->skb).dst_groups = nlgroup;
+	DEBUGP("ipt_ULOG: throwing %d packets to netlink mask %u\n",
+		ub->qlen, nlgroup);
+	netlink_broadcast(nflognl, ub->skb, 0, nlgroup, GFP_ATOMIC);
+
+	ub->qlen = 0;
+	ub->skb = NULL;
+	ub->lastnlh = NULL;
+
+}
+
+
 static unsigned int ipt_ulog_target(struct sk_buff **pskb,
 				    unsigned int hooknum,
 				    const struct net_device *in,
 				    const struct net_device *out,
 				    const void *targinfo, void *userinfo)
 {
+	ulog_buff_t *ub;
 	ulog_packet_msg_t *pm;
 	size_t size, copy_len;
-	struct sk_buff *newskb = NULL;
 	struct nlmsghdr *nlh;
 	struct ipt_ulog_info *loginfo = (struct ipt_ulog_info *) targinfo;
 
@@ -71,44 +144,38 @@ static unsigned int ipt_ulog_target(struct sk_buff **pskb,
 	} else {
 		copy_len = loginfo->copy_range;
 	}
+
 	size = NLMSG_SPACE(sizeof(*pm) + copy_len);
 
+	ub = &ulog_buffers[loginfo->nl_group];
+	
 	LOCK_BH(&ulog_lock);
 
-	if ((qlen == 0) || (!nlskb)) {
-		/* alloc skb which should be big enough for a whole
-		 * multipart message. WARNING: has to be <= 131000
-		 * due to slab allocator restrictions */
-		nlskb = alloc_skb((max_qthresh * max_size), GFP_ATOMIC);
-		if (!nlskb)
-			printk("ipt_ULOG: unable to allocate %u*%u bytes!\n",
-				max_qthresh, max_size);
-	} 
+	if (!ub->skb) {
+		if (!(ub->skb = ulog_alloc_skb(size)))
+			goto alloc_failure;
+	} else if (ub->qlen >= loginfo->qthreshold ||
+		   size > skb_tailroom(ub->skb)) {
+		/* either the queue len is too high or we don't have 
+		 * enough room in nlskb left. send it to userspace. */
 
-	if (size > skb_tailroom(nlskb)) {
-		DEBUGP("ipt_ULOG: copy expand %d %d\n", 
-			skb_tailroom(nlskb), size);
-		newskb = skb_copy_expand(nlskb, skb_headroom(nlskb),
-					 size, GFP_ATOMIC);
-		if (!newskb) {
-			printk("ipt_ULOG: OOM\n");
-			goto oom_failure;
-		}
-		
-		kfree_skb(nlskb);
-		nlskb = newskb;
+		ulog_send(loginfo->nl_group);
+
+		if (!(ub->skb = ulog_alloc_skb(size)))
+			goto alloc_failure;
 	}
 
-	DEBUGP("ipt_ULOG: qlen %d, qthreshold %d\n", qlen, loginfo->qthreshold);
+	DEBUGP("ipt_ULOG: qlen %d, qthreshold %d\n", ub->qlen, 
+		loginfo->qthreshold);
 
 	/* NLMSG_PUT contains a hidden goto nlmsg_failure !!! */
-	nlh = NLMSG_PUT(nlskb, 0, qlen, ULOG_NL_EVENT, size - sizeof(*nlh));
-	qlen++;
+	nlh = NLMSG_PUT(ub->skb, 0, ub->qlen, ULOG_NL_EVENT, 
+			size - sizeof(*nlh));
+	ub->qlen++;
 
 	pm = NLMSG_DATA(nlh);
 
 	/* copy hook, prefix, timestamp, payload, etc. */
-
 	pm->data_len = copy_len;
 	pm->timestamp_sec = (*pskb)->stamp.tv_sec;
 	pm->timestamp_usec = (*pskb)->stamp.tv_usec;
@@ -140,37 +207,22 @@ static unsigned int ipt_ulog_target(struct sk_buff **pskb,
 		memcpy(pm->payload, (*pskb)->data, copy_len);
 	
 	/* check if we are building multi-part messages */
-	if (loginfo->qthreshold > 1) {
-		nlh->nlmsg_flags |= NLM_F_MULTI;
+	if (ub->qlen > 1) {
+		ub->lastnlh->nlmsg_flags |= NLM_F_MULTI;
 	}
 
-	/* if threshold is reached, send message to userspace */
-	if (qlen >= loginfo->qthreshold) {
-		if (loginfo->qthreshold > 1)
-			nlh->nlmsg_type = NLMSG_DONE;
-		NETLINK_CB(nlskb).dst_groups = loginfo->nl_group;
-		DEBUGP("ipt_ULOG: throwing %d packets to netlink mask %u\n",
-			qlen, loginfo->nl_group);
-		netlink_broadcast(nflognl, nlskb, 0, loginfo->nl_group,
-				  GFP_ATOMIC);
-		qlen = 0;
-		nlskb = NULL;
-	}
+	ub->lastnlh = nlh;
 
 	UNLOCK_BH(&ulog_lock);
 
 	return IPT_CONTINUE;
 
-oom_failure:
-	if (newskb)
-		kfree_skb(newskb);
-nlmsg_failure:
-	if (nlskb) {
-		kfree(nlskb);
-		nlskb = NULL;
-	}
 
-	printk("ipt_ULOG: Error building netlink message\n");
+nlmsg_failure:
+	PRINTR("ipt_ULOG: error during NLMSG_PUT\n");
+
+alloc_failure:
+	PRINTR("ipt_ULOG: Error building netlink message\n");
 
 	UNLOCK_BH(&ulog_lock);
 
@@ -202,16 +254,6 @@ static int ipt_ulog_checkentry(const char *tablename,
 		return 0;
 	}
 
-	if (loginfo->qthreshold > max_qthresh) {
-		if (loginfo->qthreshold * max_size > ULOG_SLAB_MAX) {
-			DEBUGP("ipt_ULOG: qthresh too big\n");
-			return 0;
-		}
-		DEBUGP("ipt_ULOG: increasing max_qthresh to %u\n", 
-			loginfo->qthreshold);
-		max_qthresh = loginfo->qthreshold;
-	}
-	
 	return 1;
 }
 
@@ -222,7 +264,19 @@ THIS_MODULE
 
 static int __init init(void)
 {
+	int i;
+
 	DEBUGP("ipt_ULOG: init module\n");
+
+	if (nlbufsiz >= 128*1024) {
+		printk("Netlink buffer has to be <= 128kB\n");
+		return -EINVAL;
+	}
+
+	/* initialize ulog_buffers */
+	for (i = 0; i < ULOG_MAXNLGROUPS; i++)
+		memset(&ulog_buffers[i], 0, sizeof(ulog_buff_t));
+
 	nflognl = netlink_kernel_create(NETLINK_NFLOG, nflog_rcv);
 	if (!nflognl)
 		return -ENOMEM;
@@ -232,9 +286,7 @@ static int __init init(void)
 		return -EINVAL;
 	}
 
-	/* FIXME: does anybody know an easy way to determine the biggest
-	 * MTU of all interfaces in the system ? */
-	max_size = NLMSG_SPACE(1514);
+	/* FIXME: create timer to flush all groups every second or so */
 
 	return 0;
 }
