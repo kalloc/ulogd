@@ -1,3 +1,7 @@
+Version 1.21 (2005-02-16)
+- Fix compilation on certain gcc versions (Roberto Nibali)
+- Fix --log-ip-as-string for mysql, pgsql and sqlite3 (Jani Averbach)
+
 Version 1.20 (2005-02-12)
 - Add SQLITE3 Plugin
 - Add 'port' option (for tcp port number) to mysql and postgresql plugins
