@@ -1,7 +1,7 @@
 /*
  * netfilter module for userspace packet logging daemons
  *
- * (C) 2000 by Harald Welte <laforge@gnumonks.org>
+ * (C) 2000-2002 by Harald Welte <laforge@gnumonks.org>
  *
  * 2000/09/22 ulog-cprange feature added
  * 2001/01/04 in-kernel queue as proposed by Sebastian Zander 
@@ -13,8 +13,10 @@
  *
  * Released under the terms of the GPL
  *
- * This module accepts only one parameter: "nlbufsiz"
- * The parameter specifies how big the buffer for each netlink multicast
+ * This module accepts two parameters: 
+ * 
+ * nlbufsiz:
+ *   The parameter specifies how big the buffer for each netlink multicast
  * group is. e.g. If you say nlbufsiz=8192, up to eight kb of packets will
  * get accumulated in the kernel until they are sent to userspace. It is
  * NOT possible to allocate more than 128kB, and it is strongly discouraged,
@@ -23,7 +25,11 @@
  * each nlgroup you are using, so the total kernel memory usage increases
  * by that factor.
  *
- * $Id: ipt_ULOG.c,v 1.12 2001/09/01 11:57:33 laforge Exp $
+ * flushtimeout:
+ *   Specify, after how many clock ticks (intel: 100 per second) the queue
+ * should be flushed even if it is not full yet.
+ *
+ * $Id: ipt_ULOG.c,v 1.13 2001/12/04 10:18:19 laforge Exp $
  */
 
 #include <linux/module.h>
@@ -33,6 +39,7 @@
 #include <linux/socket.h>
 #include <linux/skbuff.h>
 #include <linux/kernel.h>
+#include <linux/timer.h>
 #include <linux/netlink.h>
 #include <linux/netdevice.h>
 #include <linux/mm.h>
@@ -58,9 +65,13 @@ MODULE_AUTHOR("Harald Welte <laforge@gnumonks.org>");
 MODULE_DESCRIPTION("IP tables userspace logging module");
 
 
-static int nlbufsiz = 4096;
+static unsigned int nlbufsiz = 4096;
 MODULE_PARM(nlbufsiz, "i");
 MODULE_PARM_DESC(nlbufsiz, "netlink buffer size");
+
+static unsigned int flushtimeout = 10 * HZ;
+MODULE_PARM(flushtimeout, "i");
+MODULE_PARM_DESC(flushtimeout, "buffer flush timeout");
 
 /* global data structures */
 
@@ -68,32 +79,51 @@ typedef struct {
 	unsigned int qlen;		/* number of nlmsgs' in the skb */
 	struct nlmsghdr *lastnlh;	/* netlink header of last msg in skb */
 	struct sk_buff *skb;		/* the pre-allocated skb */
+	struct timer_list timer;	/* the timer function */
 } ulog_buff_t;
 
 static ulog_buff_t ulog_buffers[ULOG_MAXNLGROUPS];	/* array of buffers */
 
 static struct sock *nflognl;	/* our socket */
-static struct sk_buff *nlskb;	/* the skb containing the nlmsg */
 static size_t qlen;		/* current length of multipart-nlmsg */
-static size_t max_size;		/* maximum gross size of one packet */
-static size_t max_qthresh;	/* maximum queue threshold of all rules */
 DECLARE_LOCK(ulog_lock);	/* spinlock */
 
-/* timer function to flush queue in ULOG_FLUSH_INTERVAL time */
-static void ulog_timer(void)
+/* send one ulog_buff_t to userspace */
+static void ulog_send(unsigned int nlgroup)
 {
+	ulog_buff_t *ub = &ulog_buffers[nlgroup];
+
+	if (timer_pending(&ub->timer)) {
+		DEBUGP("ipt_ULOG: ulog_send: timer was pending, deleting\n");
+		del_timer(&ub->timer);
+	}
+
+	/* last nlmsg needs NLMSG_DONE */
+	if (ub->qlen > 1)
+		ub->lastnlh->nlmsg_type = NLMSG_DONE;
+
+	NETLINK_CB(ub->skb).dst_groups = nlgroup;
+	DEBUGP("ipt_ULOG: throwing %d packets to netlink mask %u\n",
+		ub->qlen, nlgroup);
+	netlink_broadcast(nflognl, ub->skb, 0, nlgroup, GFP_ATOMIC);
+
+	ub->qlen = 0;
+	ub->skb = NULL;
+	ub->lastnlh = NULL;
 
 }
 
-static void ulog_send()
+
+/* timer function to flush queue in ULOG_FLUSH_INTERVAL time */
+static void ulog_timer(unsigned long data)
 {
-	NETLINK_CB(nlskb).dst_groups = loginfo->nl_group;
-	DEBUGP("ipt_ULOG: sending %d packets to netlink mask %u\n",
-		qlen, loginfo->nl_group);
-	netlink_broadcast(nflognl, nlskb, 0, loginfo->nl_group,
-			  GFP_ATOMIC);
-	qlen = 0;
-	nlskb = NULL;
+	DEBUGP("ipt_ULOG: timer function called, calling ulog_send\n");
+
+	/* lock to protect against somebody modifying our structure
+	 * from ipt_ulog_target at the same time */
+	LOCK_BH(&ulog_lock);
+	ulog_send(data);
+	UNLOCK_BH(&ulog_lock);
 }
 
 static void nflog_rcv(struct sock *sk, int len)
@@ -124,29 +154,6 @@ struct sk_buff *ulog_alloc_skb(unsigned int size)
 
 	return skb;
 }
-
-/* send one ulog_buff_t to userspace */
-static void ulog_send(unsigned int nlgroup)
-{
-	ulog_buff_t *ub;
-
-	ub = &ulog_buffers[nlgroup];
-
-	/* last nlmsg needs NLMSG_DONE */
-	if (ub->qlen > 1)
-		ub->lastnlh->nlmsg_type = NLMSG_DONE;
-
-	NETLINK_CB(ub->skb).dst_groups = nlgroup;
-	DEBUGP("ipt_ULOG: throwing %d packets to netlink mask %u\n",
-		ub->qlen, nlgroup);
-	netlink_broadcast(nflognl, ub->skb, 0, nlgroup, GFP_ATOMIC);
-
-	ub->qlen = 0;
-	ub->skb = NULL;
-	ub->lastnlh = NULL;
-
-}
-
 
 static unsigned int ipt_ulog_target(struct sk_buff **pskb,
 				    unsigned int hooknum,
@@ -242,6 +249,12 @@ static unsigned int ipt_ulog_target(struct sk_buff **pskb,
 
 	ub->lastnlh = nlh;
 
+	/* if timer isn't already running, start it */
+	if (!timer_pending(&ub->timer)) {
+		ub->timer.expires = jiffies + flushtimeout;
+		add_timer(&ub->timer);
+	}
+
 	UNLOCK_BH(&ulog_lock);
 
 	return IPT_CONTINUE;
@@ -303,8 +316,12 @@ static int __init init(void)
 	}
 
 	/* initialize ulog_buffers */
-	for (i = 0; i < ULOG_MAXNLGROUPS; i++)
+	for (i = 0; i < ULOG_MAXNLGROUPS; i++) {
 		memset(&ulog_buffers[i], 0, sizeof(ulog_buff_t));
+		init_timer(&ulog_buffers[i].timer);
+		ulog_buffers[i].timer.function = ulog_timer;
+		ulog_buffers[i].timer.data = i;
+	}
 
 	nflognl = netlink_kernel_create(NETLINK_NFLOG, nflog_rcv);
 	if (!nflognl)
@@ -314,8 +331,6 @@ static int __init init(void)
 		sock_release(nflognl->socket);
 		return -EINVAL;
 	}
-
-	/* FIXME: create timer to flush all groups every second or so */
 
 	return 0;
 }

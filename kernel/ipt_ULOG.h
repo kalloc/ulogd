@@ -1,6 +1,6 @@
-/* Header file for IP tables userspace logging, Version $Revision: 1.6 $
+/* Header file for IP tables userspace logging, Version $Revision: 1.7 $
  *
- * (C) 2000 by Harald Welte <laforge@gnumonks.org>
+ * (C) 2000-2002 by Harald Welte <laforge@gnumonks.org>
  * 
  * Distributed under the terms of GNU GPL */
 
