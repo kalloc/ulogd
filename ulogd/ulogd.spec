@@ -1,13 +1,13 @@
 Summary: ulogd - The userspace logging daemon for netfilter
 Name: ulogd
-Version: 1.01
+Version: 1.21
 Release: 1gm
 License: GPL
 Group: Network
 Source: http://ftp.netfilter.org/pub/ulogd/%{name}-%{version}.tar.gz
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 Packager: Harald Welte <laforge@gnumonks.org>
-BuildRequires: MySQL-devel postgresql-devel libpcap-devel
+BuildRequires: MySQL-devel postgresql-devel libpcap-devel libsqlite3-devel
 #BuildRequires: mysql-devel
 
 %package mysql
@@ -17,6 +17,15 @@ Group: Network
 %package pgsql
 Summary: PostgreSQL output plugin for ulogd
 Group: Network
+
+%package sqlite
+Summarry: SQLITE3 output plugin for ulogd
+Group: Network
+
+%package pcap
+Summarry: PCAP output plugin for ulogd
+Group: Network
+
 
 %description
 ulogd is an universal logging daemon for the ULOG target of netfilter, the
@@ -32,11 +41,20 @@ firewall information into a MySQL database.
 ulogd-mysql is a PostgreSQL output plugin for ulogd. It enables logging of
 firewall information into a PostgreSQL database.
 
+%description sqlite3
+ulogd-sqlite3 is a SQLITE3 output plugin for ulogd. It enables logging of
+firewall information into a SQLITE3 database.
+
+%description pcap
+ulogd-pcap is a output plugin for ulogd that saves packet logs as PCAP file.
+PCAP is a standard format that can be later analyzed by a lot of tools such as
+tcpdump and ethereal.
+
 %prep
 %setup
 
 %build
-%configure --with-mysql=/usr/lib/mysql --with-pgsql=/usr/lib/postgresql
+%configure --with-mysql=/usr/lib/mysql --with-pgsql=/usr/lib/postgresql --with-sqlite3
 make
 
 %install
@@ -66,7 +84,7 @@ rm -rf %{buildroot}
 %{_libdir}/ulogd/ulogd_LOGEMU.so
 %{_libdir}/ulogd/ulogd_OPRINT.so
 %{_libdir}/ulogd/ulogd_PWSNIFF.so
-%{_libdir}/ulogd/ulogd_PCAP.so
+%{_libdir}/ulogd/ulogd_SYSLOG.so
 %doc COPYING AUTHORS README
 %doc doc/ulogd.txt doc/ulogd.a4.ps doc/ulogd.html
 
@@ -78,7 +96,25 @@ rm -rf %{buildroot}
 %defattr(0644,root,root,0755)
 %{_libdir}/ulogd/ulogd_PGSQL.so
 
+%files sqlite3
+%defattr(0644,root,root,0755)
+%{_libdir}/ulogd/ulogd_SQLITE3.so
+
+%files pcap
+%defattr(0644,root,root,0755)
+%{_libdir}/ulogd/ulogd_PCAP.so
+
 %changelog
+* Wed Feb 16 2005 Harald Welte <laforge@gnumonks.org>
++ ulogd-1.21-1gm
+- updated to 1.21 release
+- separate sqlite3 and pcap sub-pacakges
+
+* Sat Feb 12 2005 Harald Welte <laforge@gnumonks.org>
++ ulogd-1.20-1gm
+- updated to 1.20 release
+- add ulogd.8 manpage
+
 * Sat Aug 25 2003 Harald Welte <laforge@gnumonks.org>
 + ulogd-1.00-1gm
 - updated to 1.01 release
