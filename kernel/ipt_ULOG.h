@@ -1,4 +1,4 @@
-/* Header file for IP tables userspace logging, Version $Revision: 1.4 $
+/* Header file for IP tables userspace logging, Version $Revision: 1.5 $
  *
  * (C) 2000 by Harald Welte <laforge@gnumonks.org>
  * 
@@ -14,9 +14,9 @@
 /* Why 50? Well... there is a limit imposed by the slab cache 131000
  * bytes. So the multipart netlink-message has to be < 131000 bytes.
  * Assuming a standard ethernet-mtu of 1500, we could define this up
- * to 80... but even 50 seems to be big enough.
+ * to 80... but even 50 seems to be big enough. */
 
-/* privat data structure for each rule with a ULOG target */
+/* private data structure for each rule with a ULOG target */
 struct ipt_ulog_info {
 	unsigned int nl_group;
 	size_t copy_range;
