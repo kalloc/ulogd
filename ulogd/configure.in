@@ -35,7 +35,7 @@ dnl
 dnl test for MySQL
 dnl
 AC_ARG_WITH(mysql,
- --with-mysql=<directory>		mysql installed in <directoty>,[
+ --with-mysql=<directory>		mysql installed in <directory>,[
 if test $withval != yes
 then
         dir=$withval
@@ -131,7 +131,7 @@ dnl
 dnl test for PostgreSQL
 dnl
 AC_ARG_WITH(pgsql,
- --with-pgsql=<directory>		pgsql installed in <directoty>,[
+ --with-pgsql=<directory>		pgsql installed in <directory>,[
 if test $withval != yes
 then
         dir=$withval
@@ -199,7 +199,7 @@ dnl
 dnl test for sqlite3
 dnl
 AC_ARG_WITH(sqlite3,
- --with-sqlite3=<directory>		sqlite3 installed in <directoty>,[
+ --with-sqlite3=<directory>		sqlite3 installed in <directory>,[
 if test $withval != yes
 then
         dir=$withval
