@@ -1,5 +1,5 @@
 Userspace logging facility for netfilter / linux 2.4
-$Id: README,v 1.1 2000/08/02 12:37:58 laforge Exp $
+$Id: README,v 1.2 2000/09/22 06:57:16 laforge Exp $
 
 ===> IDEA
 
@@ -9,16 +9,22 @@ to do some logging there. It should work like that:
 - Register a target called ULOG with netfilter
 - if the target is hit: 
 	- send the packet out using netlink multicast facility
-	- return NF_ACCEPT immediately
+	- return NF_CONTINUE immediately
 
-We don't have to enqueue packets, just send them out as datagrams. If the
-user process isn't fast enough this isn't our problem. 
+New with ipt_ULOG 0.8 we can accumulate packets in userspace and send
+them in small batches (1-50) to userspace. This reduces the amount of
+expensive context switches.
 
 More than one logging daemon may listen to the netlink multicast address.
 
 ===> CONTENTS
 
 The package is consisting out of three parts:
+
+NOTE:
+ipt_ULOG and libipt_ULOG are NOW INCLUDED IN NETFILTER patch-o-matic. 
+I strongly recommend using the latest package or even CVS from 
+http://netfilter.samba.org
 
 1. Netfilter target ipt_ULOG
 This is the kernel module which does the kernel part of packet passing to 
