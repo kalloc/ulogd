@@ -1,0 +1,17 @@
+libipulog:
+- Error checking at netlink socket
+- forward port my timeout enabled read-function from libipq to libipulog
+- handle multi-part nlmsgs
+
+kernel:
+- queue the logging in the kernel and send multiple packets in one 
+  multipart nlmsg
+
+ulogd:
+- commandline option for "to fork or not to fork"
+- configfile
+- add output target for sql server
+- add interpreter plugin for ftp/pop3/etc passwords
+- add a compatibility output target for syslog (really?)
+- prefix ulogd.log with timestamp
+- add support for capabilities to run as non-root
