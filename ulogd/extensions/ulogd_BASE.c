@@ -26,7 +26,7 @@
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  
- * $Id: ulogd_BASE.c,v 1.21 2003/08/24 08:25:10 laforge Exp $
+ * $Id$
  *
  */
 
@@ -173,7 +173,7 @@ static ulog_iret_t *_interp_iphdr(struct ulog_interpreter *ip,
 	ret[1].flags |= ULOGD_RETF_VALID;
 	ret[2].value.ui8 = iph->protocol;
 	ret[2].flags |= ULOGD_RETF_VALID;
-	ret[3].value.ui8 = ntohs(iph->tos);
+	ret[3].value.ui8 = iph->tos;
 	ret[3].flags |= ULOGD_RETF_VALID;
 	ret[4].value.ui8 = iph->ttl;
 	ret[4].flags |= ULOGD_RETF_VALID;
