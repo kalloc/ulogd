@@ -1,4 +1,4 @@
-/* ulogd_LOGEMU.c, Version $Revision: 1.15 $
+/* ulogd_LOGEMU.c, Version $Revision$
  *
  * ulogd output target for syslog logging emulation
  *
@@ -46,14 +46,20 @@
         ((unsigned char *)&addr)[2], \
         ((unsigned char *)&addr)[3]
 
-static config_entry_t syslogf_ce = { NULL, "file", CONFIG_TYPE_STRING, 
-				  CONFIG_OPT_NONE, 0,
-				  { string: ULOGD_LOGEMU_DEFAULT } };
+static config_entry_t syslogf_ce = { 
+	.key = "file", 
+	.type = CONFIG_TYPE_STRING, 
+	.options = CONFIG_OPT_NONE, 
+	.u.string = ULOGD_LOGEMU_DEFAULT
+};
 
-static config_entry_t syslsync_ce = { &syslogf_ce, "sync", 
-				      CONFIG_TYPE_INT, CONFIG_OPT_NONE, 0,
-				      { value: ULOGD_LOGEMU_SYNC_DEFAULT }
-				     };
+static config_entry_t syslsync_ce = { 
+	.next = &syslogf_ce, 
+	.key = "sync", 
+	.type = CONFIG_TYPE_INT, 
+	.options = CONFIG_OPT_NONE, 
+	.u.value = ULOGD_LOGEMU_SYNC_DEFAULT,
+};
 
 static FILE *of = NULL;
 
@@ -91,6 +97,9 @@ static void signal_handler_logemu(int signal)
 		
 
 static int init_logemu(void) {
+	/* FIXME: error handling */
+	config_parse_file("LOGEMU", &syslsync_ce);
+
 #ifdef DEBUG_LOGEMU
 	of = stdout;
 #else
@@ -123,8 +132,5 @@ static ulog_output_t logemu_op = {
 
 void _init(void)
 {
-	/* FIXME: error handling */
-	config_parse_file("LOGEMU", &syslsync_ce);
-
 	register_output(&logemu_op);
 }
