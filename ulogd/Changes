@@ -1,3 +1,7 @@
+Version 1.20 (2005-02-09
+- Add SQLITE3 Plugin
+- Add 'port' option (for tcp port number) to mysql and postgresql plugins
+
 Version 1.10 (2003-Oct-xx)
 - Change format of configuration file.  Now every plugin has it's own section
   in the config file, making the whole parsing procedure easier - and
