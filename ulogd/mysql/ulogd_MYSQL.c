@@ -112,7 +112,9 @@ static int mysql_output(ulog_iret_t *result)
 {
 	struct _field *f;
 	ulog_iret_t *res;
+#ifdef IP_AS_STRING
 	char *tmpstr;		/* need this for --log-ip-as-string */
+#endif
 
 	stmt_ins = stmt_val;
 
