@@ -40,61 +40,62 @@
 
 static char hostname[255];
 
-
 static ulog_iret_t *_interp_local(ulog_interpreter_t *ip,
                                   ulog_packet_msg_t *pkt)
 {
-    struct timeval tv;
-    ulog_iret_t *ret = ip->result;
+	struct timeval tv;
+	ulog_iret_t *ret = ip->result;
 
-    /* Get date */
-    gettimeofday(&tv, NULL);
+	/* Get date */
+	gettimeofday(&tv, NULL);
 
-    /* put date */
-    ret[0].value.ui32 = (unsigned long) tv.tv_sec;
-    ret[0].flags |= ULOGD_RETF_VALID;
+	/* put date */
+	ret[0].value.ui32 = (unsigned long) tv.tv_sec;
+	ret[0].flags |= ULOGD_RETF_VALID;
 
-    ret[1].value.ptr = hostname;
-    ret[1].flags |= ULOGD_RETF_VALID;
+	ret[1].value.ptr = hostname;
+	ret[1].flags |= ULOGD_RETF_VALID;
 
-    return ret;
+	return ret;
 }
 
 static ulog_iret_t local_rets[] = {
-    { NULL, NULL, 0, ULOGD_RET_UINT32, ULOGD_RETF_NONE, "local.time",
-      { ui32: 0 } },
-    { NULL, NULL, 0, ULOGD_RET_STRING, ULOGD_RETF_NONE, "local.hostname",
-      { ptr: NULL } },
+	{ .type = ULOGD_RET_UINT32, 
+	  .flags = ULOGD_RETF_NONE, 
+	  .key = "local.time",
+	},
+	{ .type = ULOGD_RET_STRING, 
+	  .flags = ULOGD_RETF_NONE, 
+	  .key = "local.hostname",
+	},
 };
 
 static ulog_interpreter_t local_ip[] = { 
-
     { NULL, "local", 0, &_interp_local, 2, local_rets },
     { NULL, "", 0, NULL, 0, NULL },
 };
 
-void _local_reg_ip(void)
+static void _local_reg_ip(void)
 {
-    ulog_interpreter_t *ip = local_ip;
-    ulog_interpreter_t *p;
+	ulog_interpreter_t *ip = local_ip;
+	ulog_interpreter_t *p;
 
-    for (p = ip; p->interp; p++)
-        register_interpreter(p);
-
+	for (p = ip; p->interp; p++)
+		register_interpreter(p);
 }
 
 void _init(void)
 {
-    /* get hostname */
-    char *tmp;
-    if (gethostname(hostname, sizeof(hostname)) < 0) {
-        ulogd_log(ULOGD_FATAL, "can't gethostname(): %s\n",
-                  strerror(errno));
-        exit(2);
-    }
-    /* strip off everything after first '.' */
-    if ((tmp = strchr(hostname, '.')))
-        *tmp = '\0';
+	/* get hostname */
+	char *tmp;
+	if (gethostname(hostname, sizeof(hostname)) < 0) {
+		ulogd_log(ULOGD_FATAL, "can't gethostname(): %s\n",
+			  strerror(errno));
+		exit(2);
+	}
+	/* strip off everything after first '.' */
+	if ((tmp = strchr(hostname, '.')))
+		*tmp = '\0';
 
-    _local_reg_ip();
+	_local_reg_ip();
 }
