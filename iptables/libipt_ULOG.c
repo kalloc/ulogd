@@ -6,7 +6,7 @@
  *
  * This software is released under the terms of GNU GPL
  * 
- * $Id: libipt_ULOG.c,v 1.4 2000/09/22 06:57:16 laforge Exp $
+ * $Id: libipt_ULOG.c,v 1.5 2001/01/30 09:30:11 laforge Exp $
  */
 #include <stdio.h>
 #include <netdb.h>
@@ -40,7 +40,7 @@ static void help(void)
 	printf("ULOG v%s options:\n"
 	       " --ulog-nlgroup nlgroup		NETLINK group used for logging\n"
 	       " --ulog-cprange size		Bytes of each packet to be passed\n"
-	       " --ulog-qthreshold		Threshold of in-kernel queue\n",
+	       " --ulog-qthreshold		Threshold of in-kernel queue\n"
 	       " --ulog-prefix prefix		Prefix log messages with this prefix.\n\n",
 	       NETFILTER_VERSION);
 }
@@ -133,7 +133,7 @@ static int parse(int c, char **argv, int invert, unsigned int *flags,
 		if (atoi(optarg) < 1)
 			exit_error(PARAMETER_PROBLEM,
 				   "Negative or zero queue threshold ?");
-		if (atoi(optarg) > ULOGD_MAX_QLEN)
+		if (atoi(optarg) > ULOG_MAX_QLEN)
 			exit_error(PARAMETER_PROBLEM,
 				   "Maximum queue length exceeded");
 		loginfo->qthreshold = atoi(optarg);
@@ -166,7 +166,7 @@ static void save(const struct ipt_ip *ip,
 	if (loginfo->copy_range)
 		printf("--ulog-cprange %d ", loginfo->copy_range);
 
-	if (loginfo->qthreshold != ULOGD_DEFAULT_QTHRESHOLD)
+	if (loginfo->qthreshold != ULOG_DEFAULT_QTHRESHOLD)
 		printf("--ulog-qthreshold %d ", loginfo->qthreshold);
 }
 
