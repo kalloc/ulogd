@@ -17,9 +17,14 @@ X queue the logging in the kernel and send multiple packets in one
 ulogd:
 X MYSQL output plugin
 X syslog compatibility output plugin
+- _fini() support for plugin destructors (needed for clean shutdown and 
+  SIGHUP configfile reload
 - commandline option for "to fork or not to fork"
 - various command line options (we don't even have --version)
 - add support for capabilities to run as non-root
 - big endian fixes
 - man pages
 - IPv6 support (core and extensions)
+
+conffile:
+- rewrite. This stuff is a real mess.
