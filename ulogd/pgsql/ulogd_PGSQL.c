@@ -1,8 +1,8 @@
-/* ulogd_PGSQL.c, Version $Revision: 1.8 $
+/* ulogd_PGSQL.c, Version $Revision$
  *
  * ulogd output plugin for logging to a PGSQL database
  *
- * (C) 2000 by Harald Welte <laforge@gnumonks.org> 
+ * (C) 2000-2005 by Harald Welte <laforge@gnumonks.org> 
  * This software is distributed under the terms of GNU GPL 
  * 
  * This plugin is based on the MySQL plugin made by Harald Welte.
@@ -305,7 +305,21 @@ static int exit_nicely(PGconn *conn)
 /* make connection and select database */
 static int pgsql_open_db(char *server, char *user, char *pass, char *db)
 {
-	char connstr[80];
+	int len;
+	char *connstr;
+
+	/* 80 is more than what we need for the fixed parts below */
+	len = 80 + strlen(user) + strlen(db);
+
+	/* hostname and  and password are the only optionals */
+	if (server)
+		len += strlen(server);
+	if (pass)
+		len += strlen(pass);
+
+	connstr = (char *) malloc(len);
+	if (!connstr)
+		return 1;
 
 	if (server) {
 		strcpy(connstr, " host=");
@@ -334,7 +348,7 @@ static int pgsql_open_db(char *server, char *user, char *pass, char *db)
 static int pgsql_init(void)
 {
 	/* have the opts parsed */
-	config_parse_file("PGSQL", &table_ca);
+	config_parse_file("PGSQL", &table_ce);
 
 	if (pgsql_open_db(host_ce.u.string, user_ce.u.string,
 			   pass_ce.u.string, db_ce.u.string)) {
