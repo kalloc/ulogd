@@ -1,4 +1,4 @@
-/* ulogd_MYSQL.c, Version $Revision: 1.15 $
+/* ulogd_MYSQL.c, Version $Revision$
  *
  * ulogd output plugin for logging to a MySQL database
  *
@@ -29,6 +29,8 @@
  *	See ulogd/doc/mysql.table.ipaddr-as-string as an example.
  *	BE WARNED: This has _WAY_ less performance during table searches.
  *
+ * 09 Feb 2005, Sven Schuster <schuster.sven@gmx.de>:
+ * 	Added the "port" parameter to specify ports different from 3306
  */
 
 #include <stdlib.h>
@@ -97,6 +99,12 @@ static config_entry_t table_ce = {
 	.key = "table", 
 	.type = CONFIG_TYPE_STRING,
 	.options = CONFIG_OPT_MANDATORY,
+};
+
+static config_entry_t port_ce = {
+	.next = &table_ce,
+	.key = "port",
+	.type = CONFIG_TYPE_INT,
 };
 
 /* our main output function, called by ulogd */
@@ -314,13 +322,14 @@ static int mysql_get_columns(const char *table)
 }
 
 /* make connection and select database */
-static int mysql_open_db(char *server, char *user, char *pass, char *db)
+static int mysql_open_db(char *server, int port, char *user, char *pass, 
+			 char *db)
 {
 	dbh = mysql_init(NULL);
 	if (!dbh)
 		return 1;
 
-	if (!mysql_real_connect(dbh, server, user, pass, db, 0, NULL, 0))
+	if (!mysql_real_connect(dbh, server, user, pass, db, port, NULL, 0))
 		return 1;
 
 	return 0;
@@ -329,9 +338,9 @@ static int mysql_open_db(char *server, char *user, char *pass, char *db)
 static int mysql_init(void)
 {
 	/* have the opts parsed */
-	config_parse_file("MYSQL", &table_ce);
+	config_parse_file("MYSQL", &port_ce);
 
-	if (mysql_open_db(host_ce.u.string, user_ce.u.string, 
+	if (mysql_open_db(host_ce.u.string, port_ce.u.value, user_ce.u.string, 
 			   pass_ce.u.string, db_ce.u.string)) {
 		ulogd_log(ULOGD_ERROR, "can't establish database connection\n");
 		return -1;
