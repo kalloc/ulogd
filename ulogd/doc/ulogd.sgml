@@ -1,17 +1,17 @@
 <!doctype linuxdoc system>
 
-<!-- $Id: ulogd.sgml,v 1.9 2003/08/23 17:52:37 laforge Exp $ -->
+<!-- $Id$ -->
 
 <article>
 
 <title>ULOGD - the Userspace Logging Daemon</title>
 <author>Harald Welte &lt;laforge@gnumonks.org&gt</author>
-<date>Revision $Revision: 1.9 $, $Date: 2003/08/23 17:52:37 $</date>
+<date>Revision $Revision$, $Date$</date>
 
 <abstract>
 This is the documentation for <tt>ulogd</tt>, the Userspace logging daemon.
 ulogd makes use of the Linux &gt;= 2.4.x packet filter subsystem (iptables) and
-the ULOG target for iptables
+the ULOG target for iptables.
 </abstract>
 
 <toc>
@@ -316,6 +316,8 @@ Name of the table to which ulogd should log
 Name of the mysql database
 <tag>host</tag>
 Name of the mysql database host
+<tag>port</tag>
+TCP port number of mysql database server
 <tag>user</tag>
 Name of the mysql user
 <tag>pass</tag>
@@ -329,7 +331,7 @@ if you have the mysql libraries installed, and the configure script was able to
 detect them. (that is: --with-pgsql was specified for ./configure) <p>
 
 The plugin automagically inserts the data into the configured table; It
-connects to mysql during the startup phase of ulogd and obtains a list of the
+connects to pgsql during the startup phase of ulogd and obtains a list of the
 columns in the table. Then it tries to resolve the column names against keys of
 interpreter plugins. This way you can easly select which information you want
 to log - just by the layout of the table.  <p>
@@ -347,13 +349,15 @@ The module defines the following configuration directives:
 <tag>table</tag>
 Name of the table to which ulogd should log
 <tag>db</tag>
-Name of the mysql database
+Name of the database
 <tag>host</tag>
 Name of the mysql database host
+<tag>port</tag>
+TCP port number of database server
 <tag>user</tag>
-Name of the mysql user
+Name of the sql user
 <tag>pass</tag>
-Password for mysql
+Password for sql user
 </descrip>
 
 <sect2>ulogd_PCAP.so
@@ -372,6 +376,51 @@ Set this to <tt>1</tt> if you want to have your pcap logfile written
 synchronously.  This may reduce performance, but makes your packets appear
 immediately in the file on disk.  The default is <tt>0</tt>
 </descrip>
+
+<sect2>ulogd_SQLITE3.so
+<p>
+An output plugin for logging into a SQLITE v3 database. This is only compiled
+if you have the sqlite libraries installed, and the configure script was able to
+detect them. (that is: --with-sqlite3 was specified for ./configure) <p>
+
+The plugin automagically inserts the data into the configured table; It
+opens the sqlite db during the startup phase of ulogd and obtains a list of the
+columns in the table. Then it tries to resolve the column names against keys of
+interpreter plugins. This way you can easly select which information you want
+to log - just by the layout of the table.  <p>
+
+If, for example, your table contains a field called 'ip_saddr', ulogd will
+resolve this against the key 'ip.saddr' and put the ip address as 32bit
+unsigned integer into the table.  <p>
+
+You may want to have a look at the file '<tt>doc/sqlite3.table</tt>' as an
+example table including fields to log all keys from ulogd_BASE.so. Just delete
+the fields you are not interested in, and create the table.  <p>
+
+The module defines the following configuration directives:
+<descrip>
+<tag>table</tag>
+Name of the table to which ulogd should log
+<tag>db</tag>
+Name of the database
+<tag>buffer</tag>
+Size of the sqlite buffer
+</descrip>
+</sect2>
+
+<sect2>ulogd_SYSLOG.so
+<p>
+An output plugin that really logs via syslogd. Lines will look exactly like printed with traditional LOG target.
+</p>
+<p>
+The module defines the following configuration directives:
+<descrip>
+<tag>facility</tag>
+The syslog facility (LOG_DAEMON, LOG_KERN, LOG_LOCAL0 .. LOG_LOCAL7, LOG_USER)
+<tag>level</tag>
+The syslog level (LOG_EMERG, LOG_ALERT, LOG_CRIT, LOG_ERR, LOG_WARNING, LOG_NOTICE, LOG_INFO, LOG_DEBUG)
+</descrip>
+</sect2>
 
 <sect> QUESTIONS / COMMENTS
 <p>
