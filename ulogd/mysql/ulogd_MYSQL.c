@@ -335,7 +335,7 @@ static int mysql_open_db(char *server, int port, char *user, char *pass,
 	return 0;
 }
 
-static int mysql_init(void)
+static int _mysql_init(void)
 {
 	/* have the opts parsed */
 	config_parse_file("MYSQL", &port_ce);
@@ -356,7 +356,7 @@ static int mysql_init(void)
 	return 0;
 }
 
-static void mysql_fini(void)
+static void _mysql_fini(void)
 {
 	mysql_close(dbh);
 }
@@ -364,8 +364,8 @@ static void mysql_fini(void)
 static ulog_output_t mysql_plugin = { 
 	.name = "mysql", 
 	.output = &mysql_output, 
-	.init = &mysql_init,
-	.fini = &mysql_fini,
+	.init = &_mysql_init,
+	.fini = &_mysql_fini,
 };
 
 void _init(void) 
