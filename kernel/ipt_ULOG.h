@@ -1,15 +1,23 @@
+/* Header file for IP tables userspace logging, Version $Revision$
+ *
+ * (C) 2000 by Harald Welte <laforge@gnumonks.org>
+ * 
+ * Distributed under the terms of GNU GPL */
+
 #ifndef _IPT_ULOG_H
 #define _IPT_ULOG_H
 
 #define ULOG_MAC_LEN	80
 #define ULOG_PREFIX_LEN	32
 
+/* privat data structure for each rule with a ULOG target */
 struct ipt_ulog_info {
-	unsigned char logflags;
 	unsigned int nl_group;
+	size_t copy_range;
 	char prefix[ULOG_PREFIX_LEN];
 };
 
+/* Format of the ULOG packets passed through netlink */
 typedef struct ulog_packet_msg {
 	unsigned long mark;
 	long timestamp_sec;
