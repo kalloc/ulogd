@@ -1,11 +1,11 @@
 /*
  * netfilter module for userspace packet logging daemons
  *
- * (C) 2000 by Harald Welte <laforge@sunbeam.franken.de>
+ * (C) 2000 by Harald Welte <laforge@gnumonks.org>
  *
  * Released under the terms of the GPL
  *
- * $Id: ipt_ULOG.c,v 1.4 2000/07/31 11:41:06 laforge Exp $
+ * $Id: ipt_ULOG.c,v 1.5 2000/08/11 09:56:42 laforge Exp $
  */
 
 #include <linux/module.h>
@@ -29,6 +29,9 @@
 #else
 #define DEBUGP(format, args...)
 #endif
+
+MODULE_AUTHOR("Harald Welte <laforge@gnumonks.org>");
+MODULE_DESCRIPTION("IP tables userspace logging module");
 
 static struct sock *nflognl;
 

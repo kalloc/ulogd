@@ -1,10 +1,10 @@
 /* Shared library add-on to iptables to add ULOG support.
  * 
- * (C) 2000 by Harald Welte <laforge@sunbeam.franken.de>
+ * (C) 2000 by Harald Welte <laforge@gnumonks.org>
  *
  * This software is released under the terms of GNU GPL
  * 
- * $Id: libipt_ULOG.c,v 1.2 2000/07/31 11:50:12 laforge Exp laforge $
+ * $Id: libipt_ULOG.c,v 1.3 2000/07/31 11:51:50 laforge Exp $
  */
 #include <stdio.h>
 #include <netdb.h>

@@ -9,9 +9,6 @@ kernel:
 
 ulogd:
 - commandline option for "to fork or not to fork"
-- configfile
 - add output target for sql server
-- add interpreter plugin for ftp/pop3/etc passwords
 - add a compatibility output target for syslog (really?)
-- prefix ulogd.log with timestamp
 - add support for capabilities to run as non-root
