@@ -9,7 +9,7 @@
  *
  * Released under the terms of the GPL
  *
- * $Id: ipt_ULOG.c,v 1.7 2001/01/30 09:27:31 laforge Exp $
+ * $Id: ipt_ULOG.c,v 1.8 2001/01/30 11:54:14 laforge Exp $
  */
 
 #include <linux/module.h>
@@ -44,7 +44,7 @@ static struct sk_buff *nlskb;	/* the skb containing the nlmsg */
 static size_t qlen;		/* current length of multipart-nlmsg */
 static size_t max_size;		/* maximum gross size of one packet */
 static size_t max_qthresh;	/* maximum queue threshold of all rules */
-static spinlock_t ulog_lock;	/* spinlock */
+DECLARE_LOCK(ulog_lock);	/* spinlock */
 
 static void nflog_rcv(struct sock *sk, int len)
 {
@@ -72,7 +72,7 @@ static unsigned int ipt_ulog_target(struct sk_buff **pskb,
 	}
 	size = NLMSG_SPACE(sizeof(*pm) + copy_len);
 
-	spin_lock_bh(ulog_lock);
+	LOCK_BH(&ulog_lock);
 
 	if ((qlen == 0) || (!nlskb)) {
 		/* alloc skb which should be big enough for a whole
@@ -153,7 +153,7 @@ static unsigned int ipt_ulog_target(struct sk_buff **pskb,
 		nlskb = NULL;
 	}
 
-	spin_unlock_bh(ulog_lock);
+	UNLOCK_BH(&ulog_lock);
 
 	return IPT_CONTINUE;
 
@@ -168,7 +168,7 @@ nlmsg_failure:
 
 	printk("ipt_ULOG: Error building netlink message\n");
 
-	spin_unlock_bh(ulog_lock);
+	UNLOCK_BH(&ulog_lock);
 
 	return IPT_CONTINUE;
 }
@@ -231,8 +231,6 @@ static int __init init(void)
 	/* FIXME: does anybody know an easy way to determine the biggest
 	 * MTU of all interfaces in the system ? */
 	max_size = 1500;
-
-	spin_lock_init(ulog_lock);
 
 	return 0;
 }
