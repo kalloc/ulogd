@@ -38,8 +38,12 @@ distclean: clean
 	@for d in $(SUBDIRS); do if ! make -C $$d $@; then exit 1; fi; done
 	rm -f Makefile config.cache config.log config.status Rules.make
 
+.PHONY: docbuild
+docbuild:
+	make -C doc distrib
+
 .PHONY: distrib
-distrib: distclean delrelease $(RELEASE_DIR)/ulogd-$(ULOGD_VERSION).tar.bz2 diff
+distrib: docbuild distclean delrelease $(RELEASE_DIR)/ulogd-$(ULOGD_VERSION).tar.bz2 diff
 
 .PHONY: delrelease
 delrelease:
