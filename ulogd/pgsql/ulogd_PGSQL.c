@@ -241,7 +241,7 @@ static int pgsql_createstmt(void)
 	return 0;
 }
 
-#define PGSQL_GETCOLUMN_TEMPLATE "SELECT  a.attname FROM pg_class c, pg_attribute a WHERE c.relname ='%s' AND a.attnum>0 AND a.attrelid=c.oid ORDER BY a.attnum
+#define PGSQL_GETCOLUMN_TEMPLATE "SELECT  a.attname FROM pg_class c, pg_attribute a WHERE c.relname ='%s' AND a.attnum>0 AND a.attrelid=c.oid ORDER BY a.attnum"
 
 /* find out which columns the table has */
 static int pgsql_get_columns(const char *table)
@@ -257,7 +257,7 @@ static int pgsql_get_columns(const char *table)
 	if (!dbh)
 		return 1;
 
-	snprintf(pgbuf, sizeof(pgbuf)-1, "SELECT  a.attname FROM pg_class c, pg_attribute a WHERE c.relname ='%s' AND a.attnum>0 AND a.attrelid=c.oid ORDER BY a.attnum", table);
+	snprintf(pgbuf, sizeof(pgbuf)-1, PGSQL_GETCOLUMN_TEMPLATE, table);
 	ulogd_log(ULOGD_DEBUG, pgbuf);
 
 	result = PQexec(dbh, pgbuf);
@@ -369,15 +369,17 @@ static int pgsql_init(void)
 	if (pgsql_open_db(host_ce.u.string, port_ce.u.value, user_ce.u.string,
 			   pass_ce.u.string, db_ce.u.string)) {
 		ulogd_log(ULOGD_ERROR, "can't establish database connection\n");
-		return;
+		return 1;
 	}
 
 	/* read the fieldnames to know which values to insert */
 	if (pgsql_get_columns(table_ce.u.string)) {
 		ulogd_log(ULOGD_ERROR, "unable to get pgsql columns\n");
-		return;
+		return 1;
 	}
 	pgsql_createstmt();
+
+	return 0;
 }
 
 static void pgsql_fini(void)
