@@ -65,6 +65,7 @@ host="localhost"
 
 [PGSQL]
 table="ulog"
+schema="public"
 pass="changeme"
 user="postgres"
 db="ulogd"

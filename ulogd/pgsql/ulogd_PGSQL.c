@@ -80,12 +80,22 @@ static config_entry_t table_ce = {
 	.options = CONFIG_OPT_MANDATORY,
 };
 
+static config_entry_t schema_ce = { 
+	.next = &table_ce, 
+	.key = "schema", 
+	.type = CONFIG_TYPE_STRING,
+	.options = CONFIG_OPT_NONE,
+	.u.string = "public",
+};
+
 static config_entry_t port_ce = {
-	.next = &table_ce,
+	.next = &schema_ce,
 	.key = "port",
 	.type = CONFIG_TYPE_INT,
 	.options = CONFIG_OPT_NONE,
 };
+
+static unsigned char pgsql_have_schemas;
 
 /* our main output function, called by ulogd */
 static int pgsql_output(ulog_iret_t *result)
@@ -190,6 +200,37 @@ static int pgsql_output(ulog_iret_t *result)
 	return 0;
 }
 
+#define PGSQL_HAVE_NAMESPACE_TEMPLATE "SELECT nspname FROM pg_namespace n WHERE n.nspname='%s'"
+
+/* Determine if server support schemas */
+static int pgsql_namespace(void) {
+	PGresult *result;
+	char pgbuf[strlen(PGSQL_HAVE_NAMESPACE_TEMPLATE)+strlen(schema_ce.u.string)+1];
+
+	if (!dbh)
+		return 1;
+
+	sprintf(pgbuf, PGSQL_HAVE_NAMESPACE_TEMPLATE, schema_ce.u.string);
+	ulogd_log(ULOGD_DEBUG, "%s\n", pgbuf);
+	
+	result = PQexec(dbh, pgbuf);
+	if (!result) {
+		ulogd_log(ULOGD_DEBUG, "\n result false");
+		return 1;
+	}
+
+	if (PQresultStatus(result) == PGRES_TUPLES_OK) {
+		ulogd_log(ULOGD_DEBUG, "using schema %s\n", schema_ce.u.string);
+		pgsql_have_schemas = 1;
+	} else {
+		pgsql_have_schemas = 0;
+	}
+
+	PQclear(result);
+	
+	return 0;
+}
+
 #define PGSQL_INSERTTEMPL   "insert into X (Y) values (Z)"
 #define PGSQL_VALSIZE	100
 
@@ -208,7 +249,7 @@ static int pgsql_createstmt(void)
 	}
 
 	/* caclulate the size for the insert statement */
-	size = strlen(PGSQL_INSERTTEMPL) + strlen(table_ce.u.string);
+	size = strlen(PGSQL_INSERTTEMPL) + strlen(table_ce.u.string) + strlen(schema_ce.u.string) + 1;
 
 	for (f = fields; f; f = f->next) {
 		/* we need space for the key and a comma, as well as
@@ -225,7 +266,12 @@ static int pgsql_createstmt(void)
 		return 1;
 	}
 
-	sprintf(stmt, "insert into %s (", table_ce.u.string);
+	if (pgsql_have_schemas) {
+		sprintf(stmt, "insert into %s.%s (", schema_ce.u.string, table_ce.u.string);
+	} else {
+		sprintf(stmt, "insert into %s (", table_ce.u.string);
+	}
+
 	stmt_val = stmt + strlen(stmt);
 
 	for (f = fields; f; f = f->next) {
@@ -247,12 +293,14 @@ static int pgsql_createstmt(void)
 
 #define PGSQL_GETCOLUMN_TEMPLATE "SELECT  a.attname FROM pg_class c, pg_attribute a WHERE c.relname ='%s' AND a.attnum>0 AND a.attrelid=c.oid ORDER BY a.attnum"
 
+#define PGSQL_GETCOLUMN_TEMPLATE_SCHEMA "SELECT a.attname FROM pg_attribute a, pg_class c LEFT JOIN pg_namespace n ON c.relnamespace=n.oid WHERE c.relname ='%s' AND n.nspname='%s' AND a.attnum>0 AND a.attrelid=c.oid AND a.attisdropped=FALSE ORDER BY a.attnum"
+
 /* find out which columns the table has */
 static int pgsql_get_columns(const char *table)
 {
 	PGresult *result;
 	char buf[ULOGD_MAX_KEYLEN];
-	char pgbuf[strlen(PGSQL_GETCOLUMN_TEMPLATE)+strlen(table)+1];
+	char pgbuf[strlen(PGSQL_GETCOLUMN_TEMPLATE_SCHEMA)+strlen(table)+strlen(schema_ce.u.string)+2];
 	char *underscore;
 	struct _field *f;
 	int id;
@@ -261,8 +309,13 @@ static int pgsql_get_columns(const char *table)
 	if (!dbh)
 		return 1;
 
-	snprintf(pgbuf, sizeof(pgbuf)-1, PGSQL_GETCOLUMN_TEMPLATE, table);
-	ulogd_log(ULOGD_DEBUG, pgbuf);
+	if (pgsql_have_schemas) {
+		snprintf(pgbuf, sizeof(pgbuf)-1, PGSQL_GETCOLUMN_TEMPLATE_SCHEMA, table, schema_ce.u.string);
+	} else {
+		snprintf(pgbuf, sizeof(pgbuf)-1, PGSQL_GETCOLUMN_TEMPLATE, table);
+	}
+
+	ulogd_log(ULOGD_DEBUG, "%s\n", pgbuf);
 
 	result = PQexec(dbh, pgbuf);
 	if (!result) {
@@ -374,6 +427,11 @@ static int pgsql_init(void)
 			   pass_ce.u.string, db_ce.u.string)) {
 		ulogd_log(ULOGD_ERROR, "can't establish database connection\n");
 		return 1;
+	}
+
+	if (pgsql_namespace()) {
+		return 1;
+		ulogd_log(ULOGD_ERROR, "unable to test for pgsql schemas\n");
 	}
 
 	/* read the fieldnames to know which values to insert */
