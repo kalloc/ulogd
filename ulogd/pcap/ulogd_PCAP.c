@@ -1,4 +1,4 @@
-/* ulogd_PCAP.c, Version $Revision: 1.7 $
+/* ulogd_PCAP.c, Version $Revision$
  *
  * ulogd output target for writing pcap-style files (like tcpdump)
  *
@@ -53,7 +53,7 @@ static config_entry_t pcapf_ce = {
 	.key = "file", 
 	.type = CONFIG_TYPE_STRING, 
 	.options = CONFIG_OPT_NONE,
-	.u.string = ULOGD_PCAP_DEFAULT,
+	.u = { .string = ULOGD_PCAP_DEFAULT }
 };
 
 static config_entry_t pcapsync_ce = { 
@@ -61,7 +61,7 @@ static config_entry_t pcapsync_ce = {
 	.key = "sync", 
 	.type = CONFIG_TYPE_INT,
 	.options = CONFIG_OPT_NONE,
-	.u.value = ULOGD_PCAP_SYNC_DEFAULT,
+	.u = { .value = ULOGD_PCAP_SYNC_DEFAULT }
 };
 
 static FILE *of = NULL;

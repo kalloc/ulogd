@@ -83,7 +83,7 @@ static config_entry_t outf_ce = {
 	.key = "file", 
 	.type = CONFIG_TYPE_STRING, 
 	.options = CONFIG_OPT_NONE,
-	.u.string = ULOGD_OPRINT_DEFAULT,
+	.u = { .string = ULOGD_OPRINT_DEFAULT }
 };
 
 static void sighup_handler_print(int signal)

@@ -50,7 +50,7 @@ static config_entry_t syslogf_ce = {
 	.key = "file", 
 	.type = CONFIG_TYPE_STRING, 
 	.options = CONFIG_OPT_NONE, 
-	.u.string = ULOGD_LOGEMU_DEFAULT
+	.u = { .string = ULOGD_LOGEMU_DEFAULT }
 };
 
 static config_entry_t syslsync_ce = { 
@@ -58,7 +58,7 @@ static config_entry_t syslsync_ce = {
 	.key = "sync", 
 	.type = CONFIG_TYPE_INT, 
 	.options = CONFIG_OPT_NONE, 
-	.u.value = ULOGD_LOGEMU_SYNC_DEFAULT,
+	.u = { .value = ULOGD_LOGEMU_SYNC_DEFAULT }
 };
 
 static FILE *of = NULL;
