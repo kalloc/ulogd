@@ -2,9 +2,11 @@
  * 
  * (C) 2000 by Harald Welte <laforge@gnumonks.org>
  *
+ * in-kernel queue by Sebastian Zander <zander@fokus.gmd.de>
+ *
  * This software is released under the terms of GNU GPL
  * 
- * $Id: libipt_ULOG.c,v 1.3 2000/07/31 11:51:50 laforge Exp $
+ * $Id: libipt_ULOG.c,v 1.4 2000/09/22 06:57:16 laforge Exp $
  */
 #include <stdio.h>
 #include <netdb.h>
@@ -17,6 +19,7 @@
 #include <linux/netfilter_ipv4/ipt_ULOG.h>
 
 #define ULOG_DEFAULT_NLGROUP 1
+#define ULOG_DEFAULT_QTHRESHOLD 10
 
 
 void print_groups(unsigned int gmask)
@@ -35,8 +38,9 @@ void print_groups(unsigned int gmask)
 static void help(void)
 {
 	printf("ULOG v%s options:\n"
-	       " --ulog-nlgroup nlgroup		NETLINK grouo used for logging\n"
+	       " --ulog-nlgroup nlgroup		NETLINK group used for logging\n"
 	       " --ulog-cprange size		Bytes of each packet to be passed\n"
+	       " --ulog-qthreshold		Threshold of in-kernel queue\n",
 	       " --ulog-prefix prefix		Prefix log messages with this prefix.\n\n",
 	       NETFILTER_VERSION);
 }
@@ -45,6 +49,7 @@ static struct option opts[] = {
 	{"ulog-nlgroup", 1, 0, '!'},
 	{"ulog-prefix", 1, 0, '#'},
 	{"ulog-cprange", 1, 0, 'A'},
+	{"ulog-qthreshold", 1, 0, 'B'},
 	{0}
 };
 
@@ -54,6 +59,7 @@ static void init(struct ipt_entry_target *t, unsigned int *nfcache)
 	struct ipt_ulog_info *loginfo = (struct ipt_ulog_info *) t->data;
 
 	loginfo->nl_group = ULOG_DEFAULT_NLGROUP;
+	loginfo->qthreshold = ULOG_DEFAULT_QTHRESHOLD;
 
 	/* Can't cache this */
 	*nfcache |= NFC_UNKNOWN;
@@ -62,6 +68,7 @@ static void init(struct ipt_entry_target *t, unsigned int *nfcache)
 #define IPT_LOG_OPT_NLGROUP 0x01
 #define IPT_LOG_OPT_PREFIX 0x02
 #define IPT_LOG_OPT_CPRANGE 0x04
+#define IPT_LOG_OPT_QTHRESHOLD 0x08
 
 /* Function which parses command options; returns true if it
    ate an option */
@@ -119,6 +126,19 @@ static int parse(int c, char **argv, int invert, unsigned int *flags,
 		loginfo->copy_range = atoi(optarg);
 		*flags |= IPT_LOG_OPT_CPRANGE;
 		break;
+	case 'B':
+		if (*flags & IPT_LOG_OPT_QTHRESHOLD)
+			exit_error(PARAMETER_PROBLEM,
+				   "Can't specify --ulog-qthreshold twice");
+		if (atoi(optarg) < 1)
+			exit_error(PARAMETER_PROBLEM,
+				   "Negative or zero queue threshold ?");
+		if (atoi(optarg) > ULOGD_MAX_QLEN)
+			exit_error(PARAMETER_PROBLEM,
+				   "Maximum queue length exceeded");
+		loginfo->qthreshold = atoi(optarg);
+		*flags |= IPT_LOG_OPT_QTHRESHOLD;
+		break;
 	}
 	return 1;
 }
@@ -144,7 +164,10 @@ static void save(const struct ipt_ip *ip,
 		printf("\n");
 	}
 	if (loginfo->copy_range)
-		printf("--ulog-cprange %d", loginfo->copy_range);
+		printf("--ulog-cprange %d ", loginfo->copy_range);
+
+	if (loginfo->qthreshold != ULOGD_DEFAULT_QTHRESHOLD)
+		printf("--ulog-qthreshold %d ", loginfo->qthreshold);
 }
 
 /* Prints out the targinfo. */
@@ -160,6 +183,7 @@ print(const struct ipt_ip *ip,
 	print_groups(loginfo->nl_group);
 	if (strcmp(loginfo->prefix, "") != 0)
 		printf("prefix `%s' ", loginfo->prefix);
+	printf("queue_threshold %d ", loginfo->qthreshold);
 }
 
 struct iptables_target ulog = { NULL,
