@@ -29,7 +29,7 @@
  *   Specify, after how many clock ticks (intel: 100 per second) the queue
  * should be flushed even if it is not full yet.
  *
- * $Id: ipt_ULOG.c,v 1.16 2002/02/13 07:14:53 laforge Exp $
+ * $Id: ipt_ULOG.c,v 1.17 2002/04/10 09:21:41 laforge Exp $
  */
 
 #include <linux/module.h>
@@ -344,6 +344,9 @@ static void __exit fini(void)
 
 	DEBUGP("ipt_ULOG: cleanup_module\n");
 
+	ipt_unregister_target(&ipt_ulog_reg);
+	sock_release(nflognl->socket);
+
 	/* remove pending timers and free allocated skb's */
 	for (i = 0; i < ULOG_MAXNLGROUPS; i++) {
 		ub = &ulog_buffers[i];
@@ -358,8 +361,6 @@ static void __exit fini(void)
 		}
 	}
 
-	ipt_unregister_target(&ipt_ulog_reg);
-	sock_release(nflognl->socket);
 }
 
 module_init(init);
