@@ -79,6 +79,13 @@ static config_entry_t table_ce = {
 	.options = CONFIG_OPT_MANDATORY,
 };
 
+static config_entry_t port_ce = {
+	.next = &port_ce,
+	.key = "port",
+	.type = CONFIG_TYPE_INT,
+	.options = CONFIG_OPT_NONE,
+};
+
 /* our main output function, called by ulogd */
 static int pgsql_output(ulog_iret_t *result)
 {
@@ -303,7 +310,8 @@ static int exit_nicely(PGconn *conn)
 }
 
 /* make connection and select database */
-static int pgsql_open_db(char *server, char *user, char *pass, char *db)
+static int pgsql_open_db(char *server, int port, char *user, char *pass, 
+			 char *db)
 {
 	int len;
 	char *connstr;
@@ -316,6 +324,8 @@ static int pgsql_open_db(char *server, char *user, char *pass, char *db)
 		len += strlen(server);
 	if (pass)
 		len += strlen(pass);
+	if (port)
+		len += 20;
 
 	connstr = (char *) malloc(len);
 	if (!connstr)
@@ -324,6 +334,12 @@ static int pgsql_open_db(char *server, char *user, char *pass, char *db)
 	if (server) {
 		strcpy(connstr, " host=");
 		strcat(connstr, server);
+	}
+
+	if (port) {
+		char portbuf[20];
+		snprintf(portbuf, sizeof(portbuf), " port=%u", port);
+		strcat(connstr, portbuf);
 	}
 
 	strcat(connstr, " dbname=");
@@ -348,9 +364,9 @@ static int pgsql_open_db(char *server, char *user, char *pass, char *db)
 static int pgsql_init(void)
 {
 	/* have the opts parsed */
-	config_parse_file("PGSQL", &table_ce);
+	config_parse_file("PGSQL", &port_ce);
 
-	if (pgsql_open_db(host_ce.u.string, user_ce.u.string,
+	if (pgsql_open_db(host_ce.u.string, port_ce.u.value, user_ce.u.string,
 			   pass_ce.u.string, db_ce.u.string)) {
 		ulogd_log(ULOGD_ERROR, "can't establish database connection\n");
 		return;
