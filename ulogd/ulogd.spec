@@ -4,7 +4,7 @@ Version: 1.22
 Release: 1gm
 License: GPL
 Group: Network
-Source: http://ftp.netfilter.org/pub/ulogd/%{name}-%{version}.tar.gz
+Source: ftp://ftp.netfilter.org/pub/ulogd/%{name}-%{version}.tar.gz
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 Packager: Harald Welte <laforge@gnumonks.org>
 BuildRequires: MySQL-devel postgresql-devel libpcap-devel libsqlite3-devel
@@ -19,11 +19,11 @@ Summary: PostgreSQL output plugin for ulogd
 Group: Network
 
 %package sqlite
-Summarry: SQLITE3 output plugin for ulogd
+Summary: SQLITE3 output plugin for ulogd
 Group: Network
 
 %package pcap
-Summarry: PCAP output plugin for ulogd
+Summary: PCAP output plugin for ulogd
 Group: Network
 
 
