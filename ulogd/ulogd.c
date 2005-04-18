@@ -53,6 +53,7 @@
 #include <getopt.h>
 #include <pwd.h>
 #include <grp.h>
+#include <syslog.h>
 #include <libipulog/libipulog.h>
 #include <ulogd/conffile.h>
 #include <ulogd/ulogd.h>
@@ -369,6 +370,32 @@ void register_output(ulog_output_t *me)
  * MAIN PROGRAM
  ***********************************************************************/
 
+static FILE syslog_dummy;
+
+static inline int ulogd2syslog_level(int level)
+{
+	int syslog_level = LOG_WARNING;
+
+	switch (level) {
+		case ULOGD_DEBUG:
+			syslog_level = LOG_DEBUG;
+			break;
+		case ULOGD_INFO:
+			syslog_level = LOG_INFO;
+			break;
+		case ULOGD_NOTICE:
+			syslog_level = LOG_NOTICE;
+			break;
+		case ULOGD_ERROR:
+			syslog_level = LOG_ERR;
+			break;
+		case ULOGD_FATAL:
+			syslog_level = LOG_CRIT;
+			break;
+	}
+	return syslog_level;
+}
+
 /* log message to the logfile */
 void __ulogd_log(int level, char *file, int line, const char *format, ...)
 {
@@ -381,23 +408,30 @@ void __ulogd_log(int level, char *file, int line, const char *format, ...)
 	if (level < loglevel)
 		return;
 
-	if (logfile)
-		outfd = logfile;
-	else
-		outfd = stderr;
+	if (logfile == &syslog_dummy) {
+		/* FIXME: this omit's the 'file' string */
+		va_start(ap, format);
+		vsyslog(ulogd2syslog_level(level), format, ap);
+		va_end(ap);
+	} else {
+		if (logfile)
+			outfd = logfile;
+		else
+			outfd = stderr;
 
-	va_start(ap, format);
+		va_start(ap, format);
 
-	tm = time(NULL);
-	timestr = ctime(&tm);
-	timestr[strlen(timestr)-1] = '\0';
-	fprintf(outfd, "%s <%1.1d> %s:%d ", timestr, level, file, line);
-	
-	vfprintf(outfd, format, ap);
-	va_end(ap);
+		tm = time(NULL);
+		timestr = ctime(&tm);
+		timestr[strlen(timestr)-1] = '\0';
+		fprintf(outfd, "%s <%1.1d> %s:%d ", timestr, level, file, line);
+		
+		vfprintf(outfd, format, ap);
+		va_end(ap);
 
-	/* flush glibc's buffer */
-	fflush(outfd);
+		/* flush glibc's buffer */
+		fflush(outfd);
+	}
 }
 
 /* propagate results to all registered output plugins */
@@ -474,9 +508,12 @@ static int load_plugin(char *file)
 /* open the logfile */
 static int logfile_open(const char *name)
 {
-	if (!strcmp(name,"stdout")) {
+	if (!strcmp(name, "syslog")) {
+		openlog("ulogd", LOG_PID, LOG_DAEMON);
+		logfile = &syslog_dummy;
+	} if (!strcmp(name,"stdout"))
 		logfile = stdout;
-	} else {
+	else {
 		logfile = fopen(name, "a");
 		if (!logfile) {
 			fprintf(stderr, "ERROR: can't open logfile %s: %s\n", 
@@ -560,7 +597,7 @@ static void sigterm_handler(int signal)
 
 	ipulog_destroy_handle(libulog_h);
 	free(libulog_buf);
-	if (logfile != stdout)
+	if (logfile != stdout && logfile != &syslog_dummy)
 		fclose(logfile);
 
 	for (p = ulogd_outputs; p; p = p->next) {
@@ -575,7 +612,7 @@ static void sighup_handler(int signal)
 {
 	ulog_output_t *p;
 
-	if (logfile != stdout) {
+	if (logfile != stdout && logfile != &syslog_dummy) {
 		fclose(logfile);
 		logfile = fopen(logf_ce.u.string, "a");
 		if (!logfile)

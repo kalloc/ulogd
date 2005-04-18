@@ -189,8 +189,7 @@ The following configuration parameters are available:
 The netlink multicast group, which ulgogd should bind to. This is the same as
 given with the '--ulog-nlgroup' option to iptables.
 <tag>logfile</tag>
-The main logfile, where ulogd reports any errors, warnings and other unexpected 
-conditions.
+The main logfile, where ulogd reports any errors, warnings and other unexpected conditions. Apart from a regular filename, the following special values can be used; ``syslog'' to log via the unix syslog(3) mechanism.  ``stdout'' to log to stdout.
 <tag>loglevel</tag>
 This specifies, how verbose the logging to logfile is. Currently defined
 loglevels are: 1=debug information, 3=informational messages, 5=noticable
