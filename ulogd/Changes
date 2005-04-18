@@ -1,3 +1,6 @@
+Version 1.23 (2005-04-18)
+- Add supprt for ulogd logging in syslog (the daemon log, not packet log)
+
 Version 1.22 (2005-03-07)
 - Fix postgresql endless loop (Jani Averbach)
 - Add postgrsql schema support (Bob Hockney)

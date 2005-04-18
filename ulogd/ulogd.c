@@ -37,7 +37,7 @@
  * 		- added suppurt for seteuid()
  */
 
-#define ULOGD_VERSION	"1.22"
+#define ULOGD_VERSION	"1.23"
 
 #include <unistd.h>
 #include <stdio.h>
@@ -631,7 +631,7 @@ static void print_usage(void)
 {
 	/* FIXME */
 	printf("ulogd Version %s\n", ULOGD_VERSION);
-	printf("Copyright (C) 2000-2004 Harald Welte "
+	printf("Copyright (C) 2000-2005 Harald Welte "
 	       "<laforge@gnumonks.org>\n");
 	printf("This is free software with ABSOLUTELY NO WARRANTY.\n\n");
 	printf("Parameters:\n");
@@ -686,7 +686,7 @@ int main(int argc, char* argv[])
 			break;
 		case 'V':
 			printf("ulogd Version %s\n", ULOGD_VERSION);
-			printf("Copyright (C) 2000-2002 Harald Welte "
+			printf("Copyright (C) 2000-2005 Harald Welte "
 			       "<laforge@gnumonks.org>\n");
 			exit(0);
 			break;
