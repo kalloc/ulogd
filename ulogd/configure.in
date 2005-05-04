@@ -46,7 +46,13 @@ mysqldir=""
 AC_MSG_CHECKING(for MySQL files)
 for d in $dir /usr /usr/local /usr/local/mysql /opt/mysql /opt/packages/mysql
 do
-        if test -f $d/lib/mysql/libmysqlclient.so
+        if test -f $d/lib64/mysql/libmysqlclient.so
+	then
+                AC_MSG_RESULT(found mysql in $d/lib64)
+                mysqldir=$d
+                mysqldir_suffix=64/mysql
+                break
+        elif test -f $d/lib/mysql/libmysqlclient.so
         then
                 AC_MSG_RESULT(found mysql in $d)
                 mysqldir=$d
@@ -142,7 +148,17 @@ pgsqldir=""
 AC_MSG_CHECKING(for PGSQL files)
 for d in $dir /usr /usr/local /usr/local/pgsql /opt/pgsql /opt/packages/pgsql
 do
-        if test -f $d/lib/pgsql/libpq.so
+        if test -f $d/lib64/pgsql/libpq.so
+        then
+                AC_MSG_RESULT(found pgsql in $d)
+                pgsqldir=$d
+                break
+        elif test -f $d/lib/pgsql/libpq.so
+        then
+                AC_MSG_RESULT(found pgsql in $d)
+                pgsqldir=$d
+                break
+        elif test -f $d/lib64/libpq.so
         then
                 AC_MSG_RESULT(found pgsql in $d)
                 pgsqldir=$d
