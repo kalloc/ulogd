@@ -91,7 +91,6 @@
 static struct ipulog_handle *libulog_h;	/* our libipulog handle */
 static unsigned char* libulog_buf;	/* the receive buffer */
 static FILE *logfile = NULL;		/* logfile pointer */
-static int loglevel = 1;		/* current loglevel */
 static char *ulogd_configfile = ULOGD_CONFIGFILE;
 
 /* linked list for all registered interpreters */
@@ -361,7 +360,7 @@ void register_output(ulog_output_t *me)
 				me->name);
 		exit(EXIT_FAILURE);
 	}
-	ulogd_log(ULOGD_NOTICE, "registering output `%s'\n", me->name);
+	ulogd_log(ULOGD_INFO, "registering output `%s'\n", me->name);
 	me->next = ulogd_outputs;
 	ulogd_outputs = me;
 }
@@ -395,45 +394,6 @@ static inline int ulogd2syslog_level(int level)
 	}
 	return syslog_level;
 }
-
-/* log message to the logfile */
-void __ulogd_log(int level, char *file, int line, const char *format, ...)
-{
-	char *timestr;
-	va_list ap;
-	time_t tm;
-	FILE *outfd;
-
-	/* log only messages which have level at least as high as loglevel */
-	if (level < loglevel)
-		return;
-
-	if (logfile == &syslog_dummy) {
-		/* FIXME: this omit's the 'file' string */
-		va_start(ap, format);
-		vsyslog(ulogd2syslog_level(level), format, ap);
-		va_end(ap);
-	} else {
-		if (logfile)
-			outfd = logfile;
-		else
-			outfd = stderr;
-
-		va_start(ap, format);
-
-		tm = time(NULL);
-		timestr = ctime(&tm);
-		timestr[strlen(timestr)-1] = '\0';
-		fprintf(outfd, "%s <%1.1d> %s:%d ", timestr, level, file, line);
-		
-		vfprintf(outfd, format, ap);
-		va_end(ap);
-
-		/* flush glibc's buffer */
-		fflush(outfd);
-	}
-}
-
 /* propagate results to all registered output plugins */
 static void propagate_results(ulog_iret_t *ret)
 {
@@ -584,10 +544,48 @@ static config_entry_t nlgroup_ce = { &plugin_ce, "nlgroup", CONFIG_TYPE_INT,
 
 static config_entry_t loglevel_ce = { &nlgroup_ce, "loglevel", CONFIG_TYPE_INT,
 				      CONFIG_OPT_NONE, 0, 
-				      { value: 1 } };
+				      { value: ULOGD_NOTICE } };
 static config_entry_t rmem_ce = { &loglevel_ce, "rmem", CONFIG_TYPE_INT,
 				  CONFIG_OPT_NONE, 0, 
 				  { value: ULOGD_RMEM_DEFAULT } };
+
+/* log message to the logfile */
+void __ulogd_log(int level, char *file, int line, const char *format, ...)
+{
+	char *timestr;
+	va_list ap;
+	time_t tm;
+	FILE *outfd;
+
+	/* log only messages which have level at least as high as loglevel */
+	if (level < loglevel_ce.u.value)
+		return;
+
+	if (logfile == &syslog_dummy) {
+		/* FIXME: this omit's the 'file' string */
+		va_start(ap, format);
+		vsyslog(ulogd2syslog_level(level), format, ap);
+		va_end(ap);
+	} else {
+		if (logfile)
+			outfd = logfile;
+		else
+			outfd = stderr;
+
+		va_start(ap, format);
+
+		tm = time(NULL);
+		timestr = ctime(&tm);
+		timestr[strlen(timestr)-1] = '\0';
+		fprintf(outfd, "%s <%1.1d> %s:%d ", timestr, level, file, line);
+		
+		vfprintf(outfd, format, ap);
+		va_end(ap);
+
+		/* flush glibc's buffer */
+		fflush(outfd);
+	}
+}
 
 static void sigterm_handler(int signal)
 {
@@ -799,7 +797,7 @@ int main(int argc, char* argv[])
 	signal(SIGHUP, &sighup_handler);
 	signal(SIGTERM, &sigterm_handler);
 
-	ulogd_log(ULOGD_NOTICE, 
+	ulogd_log(ULOGD_INFO, 
 		  "initialization finished, entering main loop\n");
 
 	/* endless loop receiving packets and handling them over to
