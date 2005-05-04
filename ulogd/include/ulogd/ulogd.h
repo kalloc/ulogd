@@ -1,6 +1,6 @@
 #ifndef _ULOGD_H
 #define _ULOGD_H
-/* ulogd, Version $Revision: 1.16 $
+/* ulogd, Version $Revision$
  *
  * userspace logging daemon for netfilter ULOG target
  * of the linux 2.4 netfilter subsystem.
@@ -55,8 +55,6 @@
 #define ULOGD_NOTICE	5	/* abnormal/unexpected condition */
 #define ULOGD_ERROR	7	/* error condition, requires user action */
 #define ULOGD_FATAL	8	/* fatal, program aborted */
-
-extern FILE *logfile;
 
 typedef struct ulog_iret {
 	/* next interpreter return (key) in the global list */
