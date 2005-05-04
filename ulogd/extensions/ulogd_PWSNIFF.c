@@ -93,15 +93,15 @@ static ulog_iret_t *_interp_pwsniff(ulog_interpreter_t *ip, ulog_packet_msg_t *p
 	for (ptr = (unsigned char *) tcph + sizeof(struct tcphdr); 
 			ptr < (unsigned char *) tcph + tcplen; ptr++)
 	{
-		if (!strncasecmp(ptr, "USER ", 5)) {
+		if (!strncasecmp((char *)ptr, "USER ", 5)) {
 			begp = ptr+5;
-			endp = _get_next_blank(begp, (char *)tcph + tcplen);
+			endp = (unsigned char *)_get_next_blank((char *)begp, (char *)tcph + tcplen);
 			if (endp)
 				len = endp - begp + 1;
 		}
-		if (!strncasecmp(ptr, "PASS ", 5)) {
+		if (!strncasecmp((char *)ptr, "PASS ", 5)) {
 			pw_begp = ptr+5;
-			pw_endp = _get_next_blank(pw_begp, 
+			pw_endp = (unsigned char *)_get_next_blank((char *)pw_begp, 
 					(char *)tcph + tcplen);
 			if (pw_endp)
 				pw_len = pw_endp - pw_begp + 1;
@@ -115,7 +115,7 @@ static ulog_iret_t *_interp_pwsniff(ulog_interpreter_t *ip, ulog_packet_msg_t *p
 			ulogd_log(ULOGD_ERROR, "OOM (size=%u)\n", len);
 			return NULL;
 		}
-		strncpy(ret[0].value.ptr, begp, len);
+		strncpy(ret[0].value.ptr, (char *)begp, len);
 		*((char *)ret[0].value.ptr + len + 1) = '\0';
 	}
 	if (pw_len) {
@@ -125,7 +125,7 @@ static ulog_iret_t *_interp_pwsniff(ulog_interpreter_t *ip, ulog_packet_msg_t *p
 			ulogd_log(ULOGD_ERROR, "OOM (size=%u)\n", pw_len);
 			return NULL;
 		}
-		strncpy(ret[1].value.ptr, pw_begp, pw_len);
+		strncpy(ret[1].value.ptr, (char *)pw_begp, pw_len);
 		*((char *)ret[1].value.ptr + pw_len + 1) = '\0';
 
 	}
