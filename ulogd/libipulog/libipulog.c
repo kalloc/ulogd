@@ -1,5 +1,5 @@
 /* 
- * libipulog.c, $Revision: 1.11 $
+ * libipulog.c, $Revision$
  *
  * netfilter ULOG userspace library.
  *
@@ -21,7 +21,7 @@
  * This library is still under development, so be aware of sudden interface
  * changes
  *
- * $Id: libipulog.c,v 1.11 2003/05/04 10:00:10 laforge Exp $
+ * $Id$
  */
 
 #include <stdlib.h>
@@ -68,7 +68,8 @@ static ssize_t
 ipulog_netlink_recvfrom(const struct ipulog_handle *h,
 			unsigned char *buf, size_t len)
 {
-	int addrlen, status;
+	socklen_t addrlen;
+	int status;
 	struct nlmsghdr *nlh;
 	
 	if (len < sizeof(struct nlmsgerr)) {
