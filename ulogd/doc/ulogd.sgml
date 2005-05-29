@@ -26,7 +26,7 @@ possible. These are my thoughts about how the architecture which is most
 capable of doing that:
 <p>
 <descrip>
-<tag>Interpreter lugins</tag>
+<tag>Interpreter plugins</tag>
 It should be possible to add plugins / runtime modules for new protocols, etc.
 For example the standard logging daemon provides source-ip, dest-ip, 
 source-port, dest-port, etc. Logging for variuos other protocols (GRE, 
