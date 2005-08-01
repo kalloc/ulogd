@@ -125,6 +125,12 @@ static config_entry_t reconnect_ce = {
 	.type = CONFIG_TYPE_INT,
 };
 
+static config_entry_t connect_timeout_ce = {
+	.next = &reconnect_ce,
+	.key = "connect_timeout",
+	.type = CONFIG_TYPE_INT,
+};
+
 static int _mysql_init_db(ulog_iret_t *result);
 
 /* our main output function, called by ulogd */
@@ -364,6 +370,9 @@ static int mysql_open_db(char *server, int port, char *user, char *pass,
 	if (!dbh)
 		return -1;
 
+	if (connect_timeout_ce.u.value)
+		mysql_options(dbh, MYSQL_OPT_CONNECT_TIMEOUT, (const char *) &connect_timeout_ce.u.value);
+
 	if (!mysql_real_connect(dbh, server, user, pass, db, port, NULL, 0))
 		return -1;
 
@@ -422,7 +431,7 @@ static int _mysql_init_db(ulog_iret_t *result)
 static int _mysql_init(void)
 {
 	/* have the opts parsed */
-	config_parse_file("MYSQL", &reconnect_ce);
+	config_parse_file("MYSQL", &connect_timeout_ce);
 
 	return _mysql_init_db(NULL);
 }
