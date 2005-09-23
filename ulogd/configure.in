@@ -232,12 +232,24 @@ do
                 sqlite3dir=$d
                 sqlite3dir_suffix=/sqlite3
                 break
+	elif test -f $d/lib64/sqlite3/libsqlite3.so
+	then
+		AC_MSG_RESULT(found sqlite3 in $d)
+		sqlite3dir=$d
+		sqlite3dir_suffix=/sqlite3
+		break
         elif test -f $d/lib/libsqlite3.so
         then
                 AC_MSG_RESULT(found sqlite in $d)
                 sqlite3dir=$d
                 sqlite3dir_suffix=
                 break
+	elif test -f $d/lib64/libsqlite3.so
+        then
+		AC_MSG_RESULT(found sqlite in $d)
+		sqlite3dir=$d
+		sqlite3dir_suffix=
+		break
         fi
 done
 
