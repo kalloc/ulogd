@@ -96,7 +96,7 @@ static int _sqlite3_output(ulog_iret_t *result)
 	struct in_addr addr;
 #endif
 
-	col_counter = 0;
+	col_counter = 1;
 	for (f = fields; f; f = f->next) {
 		res = keyh_getres(f->id);
 
