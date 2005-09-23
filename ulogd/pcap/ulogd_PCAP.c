@@ -26,6 +26,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <string.h>
 #include <time.h>
@@ -34,6 +35,49 @@
 #include <pcap.h>
 #include <ulogd/ulogd.h>
 #include <ulogd/conffile.h>
+
+/*
+ * This is a timeval as stored in disk in a dumpfile.
+ * It has to use the same types everywhere, independent of the actual
+ * `struct timeval'
+ */
+
+struct pcap_timeval {
+    int32_t tv_sec;		/* seconds */
+    int32_t tv_usec;		/* microseconds */
+};
+
+/*
+ * How a `pcap_pkthdr' is actually stored in the dumpfile.
+ *
+ * Do not change the format of this structure, in any way (this includes
+ * changes that only affect the length of fields in this structure),
+ * and do not make the time stamp anything other than seconds and
+ * microseconds (e.g., seconds and nanoseconds).  Instead:
+ *
+ *	introduce a new structure for the new format;
+ *
+ *	send mail to "tcpdump-workers@tcpdump.org", requesting a new
+ *	magic number for your new capture file format, and, when
+ *	you get the new magic number, put it in "savefile.c";
+ *
+ *	use that magic number for save files with the changed record
+ *	header;
+ *
+ *	make the code in "savefile.c" capable of reading files with
+ *	the old record header as well as files with the new record header
+ *	(using the magic number to determine the header format).
+ *
+ * Then supply the changes to "patches@tcpdump.org", so that future
+ * versions of libpcap and programs that use it (such as tcpdump) will
+ * be able to read your new capture file format.
+ */
+
+struct pcap_sf_pkthdr {
+    struct pcap_timeval ts;	/* time stamp */
+    uint32_t caplen;		/* length of portion present */
+    uint32_t len;		/* length this packet (off wire) */
+};
 
 #ifndef ULOGD_PCAP_DEFAULT
 #define ULOGD_PCAP_DEFAULT	"/var/log/ulogd.pcap"
@@ -85,7 +129,7 @@ static struct intr_id intr_ids[INTR_IDS] = {
 
 static int pcap_output(ulog_iret_t *res)
 {
-	struct pcap_pkthdr pchdr;
+	struct pcap_sf_pkthdr pchdr;
 
 	pchdr.caplen = GET_VALUE(1).ui32;
 	pchdr.len = GET_VALUE(2).ui32;
@@ -96,7 +140,11 @@ static int pcap_output(ulog_iret_t *res)
 		pchdr.ts.tv_usec = GET_VALUE(4).ui32;
 	} else {
 		/* use current system time */
-		gettimeofday(&pchdr.ts, NULL);
+		struct timeval tv;
+		gettimeofday(&tv, NULL);
+
+		pchdr.ts.tv_sec = tv.tv_sec;
+		pchdr.ts.tv_usec = tv.tv_usec;
 	}
 
 	if (fwrite(&pchdr, sizeof(pchdr), 1, of) != 1) {
@@ -130,7 +178,7 @@ static int write_pcap_header(void)
 	pcfh.version_minor = PCAP_VERSION_MINOR;
 	pcfh.thiszone = timezone;
 	pcfh.sigfigs = 0;
-	pcfh.snaplen = 64 * 1024; /* we don't know the length in advance */
+	pcfh.snaplen = 65535; /* we don't know the length in advance */
 	pcfh.linktype = LINKTYPE_RAW;
 
 	ret =  fwrite(&pcfh, sizeof(pcfh), 1, of);
