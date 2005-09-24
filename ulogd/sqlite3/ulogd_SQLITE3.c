@@ -107,6 +107,7 @@ static int _sqlite3_output(ulog_iret_t *result)
 			
 		if (!res || !IS_VALID((*res))) {
 			/* no result, pass a null */
+			sqlite3_bind_null(p_stmt, col_counter);
 			col_counter++;
 			continue;
 		}
@@ -128,7 +129,7 @@ static int _sqlite3_output(ulog_iret_t *result)
 				sqlite3_bind_int(p_stmt,col_counter,res->value.ui8);
 				break;
 			case ULOGD_RET_UINT16:
-				sqlite3_bind_int(p_stmt,col_counter,res->value.ui8);
+				sqlite3_bind_int(p_stmt,col_counter,res->value.ui16);
 				break;
 			case ULOGD_RET_IPADDR:
 #ifdef IP_AS_STRING
