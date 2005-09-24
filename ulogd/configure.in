@@ -44,25 +44,12 @@ else
 fi
 mysqldir=""
 AC_MSG_CHECKING(for MySQL files)
-for d in $dir /usr /usr/local /usr/local/mysql /opt/mysql /opt/packages/mysql
+for d in $dir/bin /usr/bin /usr/local/bin /usr/local/mysql/bin /opt/mysql/bin /opt/packages/mysql/bin
 do
-        if test -f $d/lib64/mysql/libmysqlclient.so
+        if test -f $d/mysql_config
 	then
-                AC_MSG_RESULT(found mysql in $d/lib64)
+                AC_MSG_RESULT(found mysql_config in $d)
                 mysqldir=$d
-                mysqldir_suffix=64/mysql
-                break
-        elif test -f $d/lib/mysql/libmysqlclient.so
-        then
-                AC_MSG_RESULT(found mysql in $d)
-                mysqldir=$d
-                mysqldir_suffix=/mysql
-                break
-        elif test -f $d/lib/libmysqlclient.so
-        then
-                AC_MSG_RESULT(found mysql in $d)
-                mysqldir=$d
-                mysqldir_suffix=
                 break
         fi
 done
@@ -72,13 +59,13 @@ then
         AC_MSG_WARN(MySQL backend not used)
 else
         AC_DEFINE(HAVE_MYSQL)
-        MYSQLINCLUDES=${mysqldir}/include${mysqldir_suffix}
-        MYSQLLIBS=${mysqldir}/lib${mysqldir_suffix}
+        MYSQLINCLUDES=`$d/mysql_config --include`
+        MYSQLLIBS=`$d/mysql_config --libs`
 
 	DATABASE_DIR="${DATABASE_DIR} mysql"
 
-	MYSQL_LIB="${DATABASE_LIB} -lmysqlclient " 
-	DATABASE_LIB_DIR="${DATABASE_LIB_DIR} -L${MYSQLLIBS} "
+	MYSQL_LIB="${DATABASE_LIB} ${MYSQLLIBS} " 
+	# no change to DATABASE_LIB_DIR, since --libs already includes -L
 
 	DATABASE_DRIVERS="${DATABASE_DRIVERS} ../mysql/mysql_driver.o "
 
@@ -87,13 +74,6 @@ else
 
 	AC_SUBST(MYSQLINCLUDES)
 	AC_SUBST(MYSQL_LIB)
-
-        if test -f $MYSQLLIBS/libmystrings.so
-        then
-                DATABASE_LIB="${DATABASE_LIB} -lmystrings "
-        else
-                MYSQLEXTRALIBS=
-        fi
 
 	dnl Here we check whether we have an old MySQL client library
 	dnl installed, which does not support the mysql_real_escape_string(),
@@ -146,29 +126,14 @@ else
 fi
 pgsqldir=""
 AC_MSG_CHECKING(for PGSQL files)
-for d in $dir /usr /usr/local /usr/local/pgsql /opt/pgsql /opt/packages/pgsql
+for d in $dir/bin /usr/bin /usr/local/bin /usr/local/pgsql/bin /opt/pgsql/bin /opt/packages/pgsql/bin
 do
-        if test -f $d/lib64/pgsql/libpq.so
-        then
-                AC_MSG_RESULT(found pgsql in $d)
+	if test -x $d/pg_config
+	then
+                AC_MSG_RESULT(found pg_config in $d)
                 pgsqldir=$d
                 break
-        elif test -f $d/lib/pgsql/libpq.so
-        then
-                AC_MSG_RESULT(found pgsql in $d)
-                pgsqldir=$d
-                break
-        elif test -f $d/lib64/libpq.so
-        then
-                AC_MSG_RESULT(found pgsql in $d)
-                pgsqldir=$d
-                break
-        elif test -f $d/lib/libpq.so
-        then
-                AC_MSG_RESULT(found pgsql in $d)
-                pgsqldir=$d
-                break
-        fi
+	fi
 done
 
 if test x$pgsqldir = x
@@ -176,21 +141,13 @@ then
         AC_MSG_WARN(PGSQL backend not used)
 else
         AC_DEFINE(HAVE_PGSQL)
-	for i in include include/postgresql include/pgsql
-	do
-		if test -f ${pgsqldir}/$i/libpq-fe.h
-		then
-			PGSQLINCLUDES=${pgsqldir}/$i
-			break
-		fi
-	done
-	PGSQLLIBS=${pgsqldir}/lib
+	PGSQLINCLUDES=`$pgsqldir/pg_config --includedir`
+	PGSQLLIBS=`$pgsqldir/pg_config --libdir`
 
 	DATABASE_DIR="${DATABASE_DIR} pgsql"
-
 	PGSQL_LIB="${DATABASE_LIB} -lpq " 
-	DATABASE_LIB_DIR="${DATABASE_LIB_DIR} -L${PGSQLLIBS} "
 
+	DATABASE_LIB_DIR="${DATABASE_LIB_DIR} -L${PGSQLLIBS} "
 	DB_DEF="${DB_DEF} -DHAVE_PGSQL "
 
 	AC_SUBST(PGSQLINCLUDES)
