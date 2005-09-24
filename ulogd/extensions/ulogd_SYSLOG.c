@@ -136,7 +136,7 @@ static ulog_output_t syslog_op = {
 	.name = "syslog", 
 	.init = &syslog_init,
 	.fini = &syslog_fini,
-	.output &_output_syslog
+	.output = &_output_syslog,
 };
 
 
