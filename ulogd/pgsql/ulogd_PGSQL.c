@@ -85,7 +85,7 @@ static config_entry_t schema_ce = {
 	.key = "schema", 
 	.type = CONFIG_TYPE_STRING,
 	.options = CONFIG_OPT_NONE,
-	.u.string = "public",
+	.u = { .string = "public" },
 };
 
 static config_entry_t port_ce = {
@@ -196,6 +196,8 @@ static int pgsql_output(ulog_iret_t *result)
 				PQresultErrorMessage(pgres));
 		return 1;
 	}
+
+	PQclear(pgres);
 
 	return 0;
 }
