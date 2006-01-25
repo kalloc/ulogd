@@ -17,7 +17,7 @@
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
- * $Id: printpkt.c,v 1.1 2003/10/10 15:56:37 laforge Exp $
+ * $Id$
  *
  */
 
@@ -234,7 +234,7 @@ int printpkt_print(ulog_iret_t *res, char *buf, int prefix)
 		break;
 	default:
 
-		buf_cur += sprintf(buf_cur, "PROTO=%u ", GET_VALUE(11).ui8);
+		buf_cur += sprintf(buf_cur, "PROTO=%u ", GET_VALUE(12).ui8);
 	}
 	strcat(buf_cur, "\n");
 
