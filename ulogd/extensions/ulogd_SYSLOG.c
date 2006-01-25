@@ -50,7 +50,7 @@ static config_entry_t facility_ce = {
 static config_entry_t level_ce = { 
 	.next = &facility_ce, 
 	.key = "level", 
-	.type = CONFIG_TYPE_INT,
+	.type = CONFIG_TYPE_STRING,
 	.options = CONFIG_OPT_NONE, 
 	.u = { .string = SYSLOG_LEVEL_DEFAULT }
 };
@@ -118,7 +118,7 @@ static int syslog_init(void)
 		syslog_level = LOG_DEBUG;
 	else {
 		ulogd_log(ULOGD_FATAL, "unknown level '%s'\n",
-			facility_ce.u.string);
+			  level_ce.u.string);
 		exit(2);
 	}
 
