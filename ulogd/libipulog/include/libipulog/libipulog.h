@@ -1,7 +1,7 @@
 #ifndef _LIBIPULOG_H
 #define _LIBIPULOG_H
 
-/* $Id: libipulog.h,v 1.6 2002/07/30 07:23:36 laforge Exp $ */
+/* $Id$ */
 
 #include <errno.h>
 #include <unistd.h>
@@ -12,7 +12,7 @@
 #include <asm/types.h>
 #include <linux/netlink.h>
 #include <net/if.h>
-#include <linux/netfilter_ipv4/ipt_ULOG.h>
+#include "linux/netfilter_ipv4/ipt_ULOG.h"
 
 /* FIXME: glibc sucks */
 #ifndef MSG_TRUNC 

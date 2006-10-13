@@ -31,6 +31,8 @@ DATABASE_LIB_DIR=""
 
 DATABASE_DRIVERS=""
 
+KERNEL64_USERSPACE32=""
+
 dnl
 dnl test for MySQL
 dnl
@@ -250,6 +252,18 @@ AC_ARG_WITH(sqlite3-log-ip-as-string,
    AC_MSG_WARN(the use of --with-sqlite3-log-ip-as-string is discouraged)
 ])
 
+dnl
+dnl Kernel 64
+dnl
+
+AC_ARG_WITH(kernel-64-user-32,
+ --with-kernel-64-user-32		Use this flag to compile on system where kernel is 64 bits
+					userspace is 32.
+,[
+   KERNEL64_USERSPACE32="-DKERNEL_64_USERSPACE_32"
+   AC_MSG_WARN(The use of the flag kernel-64-user-32 could interfere with kernel evolution. Use it at your own risk.)
+])
+
 
 AC_SUBST(DATABASE_DIR)
 AC_SUBST(DATABASE_LIB)
@@ -261,6 +275,8 @@ AC_SUBST(EXTRA_SQLITE3_DEF)
 
 AC_SUBST(DATABASE_DRIVERS)
 AC_SUBST(HAVE_PCAP_H)
+
+AC_SUBST(KERNEL64_USERSPACE32)
 
 AM_CONDITIONAL(HAVE_MYSQL, test x$mysqldir != x)
 AM_CONDITIONAL(HAVE_PGSQL, test x$pgsqldir != x)
