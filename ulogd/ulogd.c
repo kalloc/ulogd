@@ -595,13 +595,14 @@ static void sigterm_handler(int signal)
 
 	ipulog_destroy_handle(libulog_h);
 	free(libulog_buf);
-	if (logfile != stdout && logfile != &syslog_dummy)
-		fclose(logfile);
 
 	for (p = ulogd_outputs; p; p = p->next) {
 		if (p->fini)
 			(*p->fini)();
 	}
+
+	if (logfile != stdout && logfile != &syslog_dummy)
+		fclose(logfile);
 
 	exit(0);
 }

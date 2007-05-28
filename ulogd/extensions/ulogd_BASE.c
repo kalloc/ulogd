@@ -32,6 +32,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <netinet/ip.h>
 #include <netinet/in.h>
@@ -62,12 +63,14 @@ static ulog_iret_t *_interp_raw(ulog_interpreter_t *ip,
 				ulog_packet_msg_t *pkt)
 {
 	unsigned char *p;
-	int i;
-	char *buf, *oldbuf = NULL;
+	int i, tmp, len = 0;
+	char *buf, *ptr = NULL;
 	ulog_iret_t *ret = ip->result;
+	size_t siz;
 
 	if (pkt->mac_len) {
-		buf = (char *) malloc(3 * pkt->mac_len + 1);
+		siz = 3 * pkt->mac_len + 1;
+		buf = (char *) malloc(siz);
 		if (!buf) {
 			ulogd_log(ULOGD_ERROR, "OOM!!!\n");
 			return NULL;
@@ -75,9 +78,14 @@ static ulog_iret_t *_interp_raw(ulog_interpreter_t *ip,
 		*buf = '\0';
 
 		p = pkt->mac;
-		oldbuf = buf;
-		for (i = 0; i < pkt->mac_len; i++, p++)
-			sprintf(buf, "%s%02x%c", oldbuf, *p, i==pkt->mac_len-1 ? ' ':':');
+		ptr = buf;
+		for (i = 0; i < pkt->mac_len; i++, p++) {
+			tmp = snprintf(ptr+len, siz-len, "%02x%s", 
+					*p, i==pkt->mac_len-1 ? "":":");
+			if (tmp == -1)
+				break;
+			len += tmp;
+		}
 		ret[0].value.ptr = buf;
 		ret[0].flags |= ULOGD_RETF_VALID;
 	}

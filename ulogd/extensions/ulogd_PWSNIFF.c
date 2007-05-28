@@ -116,7 +116,7 @@ static ulog_iret_t *_interp_pwsniff(ulog_interpreter_t *ip, ulog_packet_msg_t *p
 			return NULL;
 		}
 		strncpy(ret[0].value.ptr, (char *)begp, len);
-		*((char *)ret[0].value.ptr + len + 1) = '\0';
+		*((char *)ret[0].value.ptr + len) = '\0';
 	}
 	if (pw_len) {
 		ret[1].value.ptr = (char *) malloc(pw_len+1);
@@ -126,7 +126,7 @@ static ulog_iret_t *_interp_pwsniff(ulog_interpreter_t *ip, ulog_packet_msg_t *p
 			return NULL;
 		}
 		strncpy(ret[1].value.ptr, (char *)pw_begp, pw_len);
-		*((char *)ret[1].value.ptr + pw_len + 1) = '\0';
+		*((char *)ret[1].value.ptr + pw_len) = '\0';
 
 	}
 	return ret;

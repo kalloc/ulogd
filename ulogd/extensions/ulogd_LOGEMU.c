@@ -79,15 +79,18 @@ static int _output_logemu(ulog_iret_t *res)
 
 static void signal_handler_logemu(int signal)
 {
+	FILE *old=of;
+
 	switch (signal) {
 	case SIGHUP:
 		ulogd_log(ULOGD_NOTICE, "syslogemu: reopening logfile\n");
-		fclose(of);
 		of = fopen(syslogf_ce.u.string, "a");
 		if (!of) {
 			ulogd_log(ULOGD_FATAL, "can't open syslogemu: %s\n",
 				strerror(errno));
-			exit(2);
+			of=old;
+		} else {
+			fclose(old);
 		}
 		break;
 	default:

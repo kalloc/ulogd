@@ -267,6 +267,7 @@ int printpkt_init(void)
 			  strerror(errno));
 		exit(2);
 	}
+	hostname[sizeof(hostname)-1] = '\0';
 
 	if (get_ids())
 		return 1;

@@ -72,7 +72,10 @@ static int _output_print(ulog_iret_t *res)
 					HIPQUAD(ret->value.ui32));
 				break;
 			case ULOGD_RET_NONE:
-				fprintf(of, "<none>");
+				fprintf(of, "<none>\n");
+				break;
+			default:
+				fprintf(of, "\n");
 				break;
 		}
 	}
@@ -88,16 +91,18 @@ static config_entry_t outf_ce = {
 
 static void sighup_handler_print(int signal)
 {
+	FILE *old=of;
 
 	switch (signal) {
 	case SIGHUP:
 		ulogd_log(ULOGD_NOTICE, "PKTLOG: reopening logfile\n");
-		fclose(of);
 		of = fopen(outf_ce.u.string, "a");
 		if (!of) {
 			ulogd_log(ULOGD_FATAL, "can't open PKTLOG: %s\n",
 				strerror(errno));
-			exit(2);
+			of=old;
+		} else {
+			fclose(old);
 		}
 		break;
 	default:
