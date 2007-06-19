@@ -43,6 +43,7 @@
 #include <ulogd/ulogd.h>
 #include <ulogd/conffile.h>
 #include <mysql/mysql.h>
+#include <inttypes.h>
 
 #ifdef DEBUG_MYSQL
 #define DEBUGP(x, args...)	fprintf(stderr, x, ## args)
@@ -53,6 +54,7 @@
 struct _field {
 	char name[ULOGD_MAX_KEYLEN];
 	unsigned int id;
+	unsigned int str;
 	struct _field *next;
 };
 
@@ -68,11 +70,20 @@ static struct _field *fields;
 /* buffer for our insert statement */
 static char *stmt;
 
+/* size of our insert statement buffer */
+static size_t stmt_siz;
+
 /* pointer to the beginning of the "VALUES" part */
 static char *stmt_val;
 
 /* pointer to current inser position in statement */
 static char *stmt_ins;
+
+#define STMT_ADD(fmt...) \
+	do { 								      \
+		if (stmt_ins >= stmt && stmt_siz > stmt_ins - stmt)            \
+			snprintf(stmt_ins, stmt_siz-(stmt_ins-stmt), ##fmt); \
+	} while(0)
 
 /* Attempt to reconnect if connection is lost */
 time_t reconnect = 0;
@@ -132,6 +143,7 @@ static config_entry_t connect_timeout_ce = {
 };
 
 static int _mysql_init_db(ulog_iret_t *result);
+static void _mysql_fini(void);
 
 /* our main output function, called by ulogd */
 static int mysql_output(ulog_iret_t *result)
@@ -142,6 +154,12 @@ static int mysql_output(ulog_iret_t *result)
 	char *tmpstr;		/* need this for --log-ip-as-string */
 	struct in_addr addr;
 #endif
+	size_t esclen;
+
+	if (stmt_val == NULL) {
+		_mysql_fini();
+		return _mysql_init_db(result);
+	}
 
 	stmt_ins = stmt_val;
 
@@ -155,60 +173,74 @@ static int mysql_output(ulog_iret_t *result)
 			
 		if (!res || !IS_VALID((*res))) {
 			/* no result, we have to fake something */
-			sprintf(stmt_ins, "NULL,");
+			STMT_ADD("NULL,");
 			stmt_ins = stmt + strlen(stmt);
 			continue;
 		}
 		
 		switch (res->type) {
 			case ULOGD_RET_INT8:
-				sprintf(stmt_ins, "%d,", res->value.i8);
+				STMT_ADD("%d,", res->value.i8);
 				break;
 			case ULOGD_RET_INT16:
-				sprintf(stmt_ins, "%d,", res->value.i16);
+				STMT_ADD("%d,", res->value.i16);
 				break;
 			case ULOGD_RET_INT32:
-				sprintf(stmt_ins, "%d,", res->value.i32);
+				STMT_ADD("%d,", res->value.i32);
 				break;
 			case ULOGD_RET_INT64:
-				sprintf(stmt_ins, "%lld,", res->value.i64);
+				STMT_ADD("%"PRId64",", res->value.i64);
 				break;
 			case ULOGD_RET_UINT8:
-				sprintf(stmt_ins, "%u,", res->value.ui8);
+				STMT_ADD("%u,", res->value.ui8);
 				break;
 			case ULOGD_RET_UINT16:
-				sprintf(stmt_ins, "%u,", res->value.ui16);
+				STMT_ADD("%u,", res->value.ui16);
 				break;
 			case ULOGD_RET_IPADDR:
 #ifdef IP_AS_STRING
-				memset(&addr, 0, sizeof(addr));
-				addr.s_addr = ntohl(res->value.ui32);
-				*stmt_ins++ = '\'';
-				tmpstr = inet_ntoa(addr);
+				if (f->str) {
+					addr.s_addr = ntohl(res->value.ui32);
+					tmpstr = inet_ntoa(addr);
+					esclen = (strlen(tmpstr)*2) + 4;
+					if (stmt_siz <= (stmt_ins-stmt)+esclen){
+						STMT_ADD("'',");
+						break;
+					}
+
+					*stmt_ins++ = '\'';
 #ifdef OLD_MYSQL
-				mysql_escape_string(stmt_ins, tmpstr,
-						    strlen(tmpstr));
+					mysql_escape_string(stmt_ins,
+							    tmpstr,
+							    strlen(tmpstr));
 #else
-				mysql_real_escape_string(dbh, stmt_ins,
-							 tmpstr,
-							 strlen(tmpstr));
+					mysql_real_escape_string(dbh, 
+								stmt_ins,
+								tmpstr,
+								strlen(tmpstr));
 #endif /* OLD_MYSQL */
-                                stmt_ins = stmt + strlen(stmt);
-                                sprintf(stmt_ins, "',");
-                                break;
+	                                stmt_ins = stmt + strlen(stmt);
+					STMT_ADD("',");
+					break;
+				}
 #endif /* IP_AS_STRING */
 				/* EVIL: fallthrough when logging IP as
 				 * u_int32_t */
 			case ULOGD_RET_UINT32:
-				sprintf(stmt_ins, "%u,", res->value.ui32);
+				STMT_ADD("%u,", res->value.ui32);
 				break;
 			case ULOGD_RET_UINT64:
-				sprintf(stmt_ins, "%llu,", res->value.ui64);
+				STMT_ADD("%"PRIu64",", res->value.ui64);
 				break;
 			case ULOGD_RET_BOOL:
-				sprintf(stmt_ins, "'%d',", res->value.b);
+				STMT_ADD("'%d',", res->value.b);
 				break;
 			case ULOGD_RET_STRING:
+				esclen = (strlen(res->value.ptr)*2) + 4;
+				if (stmt_siz <= (stmt_ins-stmt) + esclen) {
+					STMT_ADD("'',");
+					break;
+				}
 				*stmt_ins++ = '\'';
 #ifdef OLD_MYSQL
 				mysql_escape_string(stmt_ins, res->value.ptr,
@@ -218,8 +250,7 @@ static int mysql_output(ulog_iret_t *result)
 					res->value.ptr, strlen(res->value.ptr));
 #endif
 				stmt_ins = stmt + strlen(stmt);
-				sprintf(stmt_ins, "',");
-			/* sprintf(stmt_ins, "'%s',", res->value.ptr); */
+				STMT_ADD("',");
 				break;
 			case ULOGD_RET_RAW:
 				ulogd_log(ULOGD_NOTICE,
@@ -235,6 +266,8 @@ static int mysql_output(ulog_iret_t *result)
 		stmt_ins = stmt + strlen(stmt);
 	}
 	*(stmt_ins - 1) = ')';
+	*stmt_ins = '\0';
+
 	DEBUGP("stmt=#%s#\n", stmt);
 
 	/* now we have created our statement, insert it */
@@ -242,6 +275,7 @@ static int mysql_output(ulog_iret_t *result)
 	if (mysql_real_query(dbh, stmt, strlen(stmt))) {
 		ulogd_log(ULOGD_ERROR, "sql error during insert: %s\n",
 				mysql_error(dbh));
+		_mysql_fini();
 		return _mysql_init_db(result);
 	}
 
@@ -261,7 +295,6 @@ static int mysql_output_disabled(ulog_iret_t *result)
 static int mysql_createstmt(void)
 {
 	struct _field *f;
-	unsigned int size;
 	char buf[ULOGD_MAX_KEYLEN];
 	char *underscore;
 
@@ -269,36 +302,40 @@ static int mysql_createstmt(void)
 		free(stmt);
 
 	/* caclulate the size for the insert statement */
-	size = strlen(MYSQL_INSERTTEMPL) + strlen(table_ce.u.string);
+	stmt_siz = strlen(MYSQL_INSERTTEMPL) + strlen(table_ce.u.string) + 1;
 
 	for (f = fields; f; f = f->next) {
 		/* we need space for the key and a comma, as well as
 		 * enough space for the values */
-		size += strlen(f->name) + 1 + MYSQL_VALSIZE;
+		stmt_siz += strlen(f->name) + 1 + MYSQL_VALSIZE;
 	}	
 
-	ulogd_log(ULOGD_DEBUG, "allocating %u bytes for statement\n", size);
+	ulogd_log(ULOGD_DEBUG, "allocating %zu bytes for statement\n",
+				stmt_siz);
 
-	stmt = (char *) malloc(size);
+	stmt = (char *) malloc(stmt_siz);
 
 	if (!stmt) {
+		stmt_val = NULL;
+		stmt_siz = 0;
 		ulogd_log(ULOGD_ERROR, "OOM!\n");
 		return -1;
 	}
 
-	sprintf(stmt, "insert into %s (", table_ce.u.string);
+	snprintf(stmt, stmt_siz, "insert into %s (", table_ce.u.string);
 	stmt_val = stmt + strlen(stmt);
 
 	for (f = fields; f; f = f->next) {
-		strncpy(buf, f->name, ULOGD_MAX_KEYLEN);	
+		strncpy(buf, f->name, ULOGD_MAX_KEYLEN-1);
+		buf[ULOGD_MAX_KEYLEN-1] = '\0';
 		while ((underscore = strchr(buf, '.')))
 			*underscore = '_';
-		sprintf(stmt_val, "%s,", buf);
+		STMT_ADD(stmt_val,stmt,stmt_siz, "%s,", buf);
 		stmt_val = stmt + strlen(stmt);
 	}
 	*(stmt_val - 1) = ')';
 
-	sprintf(stmt_val, " values (");
+	STMT_ADD(stmt_val,stmt,stmt_siz, " values (");
 	stmt_val = stmt + strlen(stmt);
 
 	ulogd_log(ULOGD_DEBUG, "stmt='%s'\n", stmt);
@@ -333,7 +370,9 @@ static int mysql_get_columns(const char *table)
 	while ((field = mysql_fetch_field(result))) {
 
 		/* replace all underscores with dots */
-		strncpy(buf, field->name, ULOGD_MAX_KEYLEN);
+		strncpy(buf, field->name, ULOGD_MAX_KEYLEN-1);
+		buf[ULOGD_MAX_KEYLEN-1] = '\0';
+
 		while ((underscore = strchr(buf, '_')))
 			*underscore = '.';
 
@@ -352,8 +391,10 @@ static int mysql_get_columns(const char *table)
 			ulogd_log(ULOGD_ERROR, "OOM!\n");
 			return -1;
 		}
-		strncpy(f->name, buf, ULOGD_MAX_KEYLEN);
+		strncpy(f->name, buf, ULOGD_MAX_KEYLEN-1);
+		f->name[ULOGD_MAX_KEYLEN-1] = '\0';
 		f->id = id;
+		f->str = !IS_NUM(field->type);
 		f->next = fields;
 		fields = f;	
 	}
@@ -371,10 +412,14 @@ static int mysql_open_db(char *server, int port, char *user, char *pass,
 		return -1;
 
 	if (connect_timeout_ce.u.value)
-		mysql_options(dbh, MYSQL_OPT_CONNECT_TIMEOUT, (const char *) &connect_timeout_ce.u.value);
+		mysql_options(dbh, MYSQL_OPT_CONNECT_TIMEOUT,
+			(const char *) &connect_timeout_ce.u.value);
 
 	if (!mysql_real_connect(dbh, server, user, pass, db, port, NULL, 0))
+	{
+		_mysql_fini();
 		return -1;
+	}
 
 	return 0;
 }
@@ -413,10 +458,17 @@ static int _mysql_init_db(ulog_iret_t *result)
 	/* read the fieldnames to know which values to insert */
 	if (mysql_get_columns(table_ce.u.string)) {
 		ulogd_log(ULOGD_ERROR, "unable to get mysql columns\n");
+		_mysql_fini();
 		return init_reconnect();
 	}
-	mysql_createstmt();
-	
+
+	if (mysql_createstmt())
+	{
+		ulogd_log(ULOGD_ERROR, "unable to create mysql statement\n");
+		_mysql_fini();
+		return init_reconnect();
+	}
+
 	/* enable plugin */
 	mysql_plugin.output = &mysql_output;
 
@@ -438,7 +490,10 @@ static int _mysql_init(void)
 
 static void _mysql_fini(void)
 {
-	mysql_close(dbh);
+	if (dbh) {
+		mysql_close(dbh);
+		dbh = NULL;
+	}
 }
 
 static ulog_output_t mysql_plugin = { 
