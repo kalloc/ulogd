@@ -79,10 +79,10 @@ static char *stmt_val;
 /* pointer to current inser position in statement */
 static char *stmt_ins;
 
-#define STMT_ADD(fmt...) \
+#define STMT_ADD(pos, fmt...) \
 	do { 								      \
-		if (stmt_ins >= stmt && stmt_siz > stmt_ins - stmt)            \
-			snprintf(stmt_ins, stmt_siz-(stmt_ins-stmt), ##fmt); \
+		if ((pos) >= stmt && stmt_siz > (pos) - stmt)            \
+			snprintf((pos), stmt_siz-((pos)-stmt), ##fmt); \
 	} while(0)
 
 /* Attempt to reconnect if connection is lost */
@@ -173,29 +173,29 @@ static int mysql_output(ulog_iret_t *result)
 			
 		if (!res || !IS_VALID((*res))) {
 			/* no result, we have to fake something */
-			STMT_ADD("NULL,");
+			STMT_ADD(stmt_ins,"NULL,");
 			stmt_ins = stmt + strlen(stmt);
 			continue;
 		}
 		
 		switch (res->type) {
 			case ULOGD_RET_INT8:
-				STMT_ADD("%d,", res->value.i8);
+				STMT_ADD(stmt_ins,"%d,", res->value.i8);
 				break;
 			case ULOGD_RET_INT16:
-				STMT_ADD("%d,", res->value.i16);
+				STMT_ADD(stmt_ins,"%d,", res->value.i16);
 				break;
 			case ULOGD_RET_INT32:
-				STMT_ADD("%d,", res->value.i32);
+				STMT_ADD(stmt_ins,"%d,", res->value.i32);
 				break;
 			case ULOGD_RET_INT64:
-				STMT_ADD("%"PRId64",", res->value.i64);
+				STMT_ADD(stmt_ins,"%"PRId64",", res->value.i64);
 				break;
 			case ULOGD_RET_UINT8:
-				STMT_ADD("%u,", res->value.ui8);
+				STMT_ADD(stmt_ins,"%u,", res->value.ui8);
 				break;
 			case ULOGD_RET_UINT16:
-				STMT_ADD("%u,", res->value.ui16);
+				STMT_ADD(stmt_ins,"%u,", res->value.ui16);
 				break;
 			case ULOGD_RET_IPADDR:
 #ifdef IP_AS_STRING
@@ -204,7 +204,7 @@ static int mysql_output(ulog_iret_t *result)
 					tmpstr = inet_ntoa(addr);
 					esclen = (strlen(tmpstr)*2) + 4;
 					if (stmt_siz <= (stmt_ins-stmt)+esclen){
-						STMT_ADD("'',");
+						STMT_ADD(stmt_ins,"'',");
 						break;
 					}
 
@@ -220,25 +220,25 @@ static int mysql_output(ulog_iret_t *result)
 								strlen(tmpstr));
 #endif /* OLD_MYSQL */
 	                                stmt_ins = stmt + strlen(stmt);
-					STMT_ADD("',");
+					STMT_ADD(stmt_ins, "',");
 					break;
 				}
 #endif /* IP_AS_STRING */
 				/* EVIL: fallthrough when logging IP as
 				 * u_int32_t */
 			case ULOGD_RET_UINT32:
-				STMT_ADD("%u,", res->value.ui32);
+				STMT_ADD(stmt_ins, "%u,", res->value.ui32);
 				break;
 			case ULOGD_RET_UINT64:
-				STMT_ADD("%"PRIu64",", res->value.ui64);
+				STMT_ADD(stmt_ins,"%"PRIu64",",res->value.ui64);
 				break;
 			case ULOGD_RET_BOOL:
-				STMT_ADD("'%d',", res->value.b);
+				STMT_ADD(stmt_ins, "'%d',", res->value.b);
 				break;
 			case ULOGD_RET_STRING:
 				esclen = (strlen(res->value.ptr)*2) + 4;
 				if (stmt_siz <= (stmt_ins-stmt) + esclen) {
-					STMT_ADD("'',");
+					STMT_ADD(stmt_ins, "'',");
 					break;
 				}
 				*stmt_ins++ = '\'';
@@ -250,7 +250,7 @@ static int mysql_output(ulog_iret_t *result)
 					res->value.ptr, strlen(res->value.ptr));
 #endif
 				stmt_ins = stmt + strlen(stmt);
-				STMT_ADD("',");
+				STMT_ADD(stmt_ins,"',");
 				break;
 			case ULOGD_RET_RAW:
 				ulogd_log(ULOGD_NOTICE,
@@ -330,12 +330,12 @@ static int mysql_createstmt(void)
 		buf[ULOGD_MAX_KEYLEN-1] = '\0';
 		while ((underscore = strchr(buf, '.')))
 			*underscore = '_';
-		STMT_ADD(stmt_val,stmt,stmt_siz, "%s,", buf);
+		STMT_ADD(stmt_val,"%s,", buf);
 		stmt_val = stmt + strlen(stmt);
 	}
 	*(stmt_val - 1) = ')';
 
-	STMT_ADD(stmt_val,stmt,stmt_siz, " values (");
+	STMT_ADD(stmt_val," values (");
 	stmt_val = stmt + strlen(stmt);
 
 	ulogd_log(ULOGD_DEBUG, "stmt='%s'\n", stmt);
