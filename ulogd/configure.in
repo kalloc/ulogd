@@ -64,7 +64,6 @@ then
 else
         AC_DEFINE(HAVE_MYSQL)
         MYSQLINCLUDES=`$d/mysql_config --include`
-        MYSQLLIBS=`$d/mysql_config --libs`
 
 	DATABASE_DIR="${DATABASE_DIR} mysql"
 
@@ -87,15 +86,8 @@ else
 
 	AC_MSG_CHECKING(for mysql_real_escape_string support)
 
-	MYSQL_FUNCTION_TEST=`strings ${MYSQLLIBS}/libmysqlclient.so | grep mysql_real_escape_string`
-
-	if test "x$MYSQL_FUNCTION_TEST" = x
-	then
-                EXTRA_MYSQL_DEF="-DOLD_MYSQL=1 "
-                AC_MSG_RESULT(found old MySQL)
-	else
-		AC_MSG_RESULT(found new MySQL)
-	fi
+	AC_SEARCH_LIBS(mysql_real_escape_string, mysqlclient_r mysqlclient,
+		[EXTRA_MYSQL_DEF="-DOLD_MYSQL=1"])
 
 fi      
 ])      
