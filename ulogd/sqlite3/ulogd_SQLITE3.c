@@ -55,6 +55,9 @@ static struct _field *fields;
 /* buffer for our insert statement */
 static char *stmt;
 
+/* size of our insert statement buffer */
+static size_t stmt_siz;
+
 /* pointer to the final prepared statement */
 static sqlite3_stmt *p_stmt;
 
@@ -85,6 +88,12 @@ static config_entry_t buffer_ce = {
 	.options = CONFIG_OPT_MANDATORY,
 };
 
+#define STMT_ADD(pos,beg,siz,fmt...) \
+	do { \
+		if((pos) >= (beg) && (siz) > (pos) - (beg)) \
+			snprintf((pos), (siz)-((pos)-(beg)), ##fmt); \
+	} while(0)
+
 /* our main output function, called by ulogd */
 static int _sqlite3_output(ulog_iret_t *result)
 {
@@ -95,6 +104,9 @@ static int _sqlite3_output(ulog_iret_t *result)
 	char *ipaddr;
 	struct in_addr addr;
 #endif
+
+	if (p_stmt == NULL || dbh == NULL)
+		return 1;
 
 	col_counter = 1;
 	for (f = fields; f; f = f->next) {
@@ -194,7 +206,6 @@ static int _sqlite3_output(ulog_iret_t *result)
 static int _sqlite3_createstmt(void)
 {
 	struct _field *f;
-	unsigned int size;
 	char buf[ULOGD_MAX_KEYLEN];
 	char *underscore;
 	char *stmt_pos;
@@ -208,64 +219,67 @@ static int _sqlite3_createstmt(void)
 	}
 
 	/* caclulate the size for the insert statement */
-	size = strlen(_SQLITE3_INSERTTEMPL) + strlen(table_ce.u.string);
+	stmt_siz = strlen(_SQLITE3_INSERTTEMPL) + strlen(table_ce.u.string);
 
-	DEBUGP("initial size: %u\n", size);
+	DEBUGP("initial size: %zu\n", stmt_siz);
 
 	col_count = 0;
 	for (f = fields; f; f = f->next) {
 		/* we need space for the key and a comma, and a ? */
-		size += strlen(f->name) + 3;
-		DEBUGP("size is now %u since adding %s\n",size,f->name);
+		stmt_siz += strlen(f->name) + 3;
+		DEBUGP("size is now %zu since adding %s\n",stmt_siz,f->name);
 		col_count++;
 	}
 
 	DEBUGP("there were %d columns\n",col_count);
-	DEBUGP("after calc name length: %u\n",size);
+	DEBUGP("after calc name length: %zu\n",stmt_siz);
 
-	ulogd_log(ULOGD_DEBUG, "allocating %u bytes for statement\n", size);
+	ulogd_log(ULOGD_DEBUG, "allocating %zu bytes for statement\n", stmt_siz);
 
-	stmt = (char *) malloc(size);
+	stmt = (char *) malloc(stmt_siz);
 
 	if (!stmt) {
+		stmt_siz = 0;
 		ulogd_log(ULOGD_ERROR, "OOM!\n");
 		return 1;
 	}
 
-	sprintf(stmt, "insert into %s (", table_ce.u.string);
+	snprintf(stmt, stmt_siz, "insert into %s (", table_ce.u.string);
 	stmt_pos = stmt + strlen(stmt);
 
 	for (f = fields; f; f = f->next) {
-		strncpy(buf, f->name, ULOGD_MAX_KEYLEN);	
+		strncpy(buf, f->name, ULOGD_MAX_KEYLEN-1);
+		buf[ULOGD_MAX_KEYLEN-1] = '\0';
 		while ((underscore = strchr(buf, '.')))
 			*underscore = '_';
-		sprintf(stmt_pos, "%s,", buf);
+		STMT_ADD(stmt_pos,stmt,stmt_siz, "%s,", buf);
 		stmt_pos = stmt + strlen(stmt);
 	}
 
 	*(stmt_pos - 1) = ')';
 
-	sprintf(stmt_pos, " values (");
+	STMT_ADD(stmt_pos,stmt,stmt_siz, " values (");
 	stmt_pos = stmt + strlen(stmt);
 
 	for (i = 0; i < col_count - 1; i++) {
-		sprintf(stmt_pos,"?,");
+		STMT_ADD(stmt_pos,stmt,stmt_siz, "?,");
 		stmt_pos += 2;
 	}
 
-	sprintf(stmt_pos, "?)");
+	STMT_ADD(stmt_pos,stmt,stmt_siz, "?)");
 	ulogd_log(ULOGD_DEBUG, "stmt='%s'\n", stmt);
 
 	DEBUGP("about to prepare statement.\n");
 
-	sqlite3_prepare(dbh,stmt,-1,&p_stmt,0);
-
-	DEBUGP("statement prepared.\n");
-
-	if (!p_stmt) {
+	if (sqlite3_prepare(dbh,stmt,-1,&p_stmt,0) != SQLITE_OK) {
+		p_stmt = NULL;
+		free( stmt);
+		stmt = stmt_pos = NULL;
 		ulogd_log(ULOGD_ERROR,"unable to prepare statement");
 		return 1;
 	}
+
+	DEBUGP("statement prepared.\n");
 
 	return 0;
 }
@@ -278,7 +292,7 @@ static int _sqlite3_createstmt(void)
 static int _sqlite3_get_columns(const char *table)
 {
 	char buf[ULOGD_MAX_KEYLEN];
-	char query[SQLITE_SELECT_LEN + CONFIG_VAL_STRING_LEN] = "select * from \0";
+	char query[SQLITE_SELECT_LEN + CONFIG_VAL_STRING_LEN + 1] = "select * from \0";
 	char *underscore;
 	struct _field *f;
 	sqlite3_stmt *schema_stmt;
@@ -289,7 +303,7 @@ static int _sqlite3_get_columns(const char *table)
 	if (!dbh)
 		return 1;
 
-	strncat(query,table,LINE_LEN);
+	strncat(query,table,sizeof(query)-strlen(query)-1);
 	
 	result = sqlite3_prepare(dbh,query,-1,&schema_stmt,0);
 	
@@ -298,7 +312,8 @@ static int _sqlite3_get_columns(const char *table)
 
 	for (column = 0; column < sqlite3_column_count(schema_stmt); column++) {
 		/* replace all underscores with dots */
-		strncpy(buf, sqlite3_column_name(schema_stmt,column), ULOGD_MAX_KEYLEN);
+		strncpy(buf, sqlite3_column_name(schema_stmt,column), ULOGD_MAX_KEYLEN-1);
+		buf[ULOGD_MAX_KEYLEN-1] = '\0';
 		while ((underscore = strchr(buf, '_')))
 			*underscore = '.';
 
@@ -317,7 +332,8 @@ static int _sqlite3_get_columns(const char *table)
 			ulogd_log(ULOGD_ERROR, "OOM!\n");
 			return 1;
 		}
-		strncpy(f->name, buf, ULOGD_MAX_KEYLEN);
+		strncpy(f->name, buf, ULOGD_MAX_KEYLEN-1);
+		f->name[ULOGD_MAX_KEYLEN-1] = '\0';
 		f->id = id;
 		f->next = fields;
 		fields = f;	
@@ -357,6 +373,7 @@ static void _sqlite3_fini(void)
 			ulogd_log(ULOGD_ERROR,"unable to commit remaining records to db.");
 
 		sqlite3_close(dbh);
+		dbh = NULL;
 		DEBUGP("database file closed\n");
 	}
 }
@@ -379,6 +396,8 @@ static int _sqlite3_init(void)
 
 	/* read the fieldnames to know which values to insert */
 	if (_sqlite3_get_columns(table_ce.u.string)) {
+		sqlite3_close(dbh);
+		dbh = NULL;
 		ulogd_log(ULOGD_ERROR, "unable to get sqlite columns\n");
 		return 1;
 	}
@@ -393,7 +412,11 @@ static int _sqlite3_init(void)
 		ulogd_log(ULOGD_ERROR,"can't create a new transaction\n");
 
 	/* create and prepare the actual insert statement */
-	_sqlite3_createstmt();
+	if(_sqlite3_createstmt()) {
+		sqlite3_close(dbh);
+		dbh = NULL;
+		return 1;
+	}
 
 	return 0;
 }

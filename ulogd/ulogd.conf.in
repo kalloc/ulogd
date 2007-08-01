@@ -73,7 +73,7 @@ host="localhost"
 
 [SQLITE3]
 table="ulog"
-db="/path/to/sqlite/db"
+db="/var/log/ulogd.sqlite3db"
 buffer=200
 
 [PCAP]

@@ -158,7 +158,7 @@ static int pcap_output(ulog_iret_t *res)
 		return 1;
 	}
 
-	if (pcapf_ce.u.value)
+	if (pcapsync_ce.u.value)
 		fflush(of);
 
 	return 0;
@@ -217,8 +217,8 @@ void append_create_outfile(void) {
 	if (!exist) {
 		of = fopen(pcapf_ce.u.string, "w");
 		if (!of) {
-			ulogd_log(ULOGD_FATAL, "can't open pcap file: %s\n",
-				  strerror(errno));
+			ulogd_log(ULOGD_FATAL, "can't open pcap file %s: %s\n",
+				  pcapf_ce.u.string, strerror(errno));
 			exit(2);
 		}
 		if (!write_pcap_header()) {
