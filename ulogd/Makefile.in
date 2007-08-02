@@ -62,7 +62,7 @@ recurse:
 	@for d in $(SUBDIRS); do if ! make -C $$d; then exit 1; fi; done
 
 ulogd: ulogd.c $(LIBIPULOG) include/ulogd/ulogd.h conffile/conffile.o $(LIBIPULOG)/libipulog.a ulogd.conf
-	$(CC) $(CFLAGS) -rdynamic $< conffile/conffile.o $(LIBIPULOG)/libipulog.a -o $@ $(LIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -rdynamic $< conffile/conffile.o $(LIBIPULOG)/libipulog.a -o $@ $(LIBS)
 
 edit = sed -e 's,@libdir\@,$(ULOGD_LIB_PATH),g'
 
