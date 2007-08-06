@@ -16,7 +16,7 @@
 #include <ulogd/ulogd.h>
 #include <ulogd/conffile.h>
 #include <libpq-fe.h>
-
+#include <inttypes.h>
 
 #ifdef DEBUG_PGSQL
 #define DEBUGP(x, args...)	fprintf(stderr, x, ## args)
@@ -27,6 +27,7 @@
 struct _field {
 	char name[ULOGD_MAX_KEYLEN];
 	unsigned int id;
+	unsigned int str;
 	struct _field *next;
 };
 
@@ -38,6 +39,9 @@ static struct _field *fields;
 
 /* buffer for our insert statement */
 static char *stmt;
+
+/* size of our insert statement buffer */
+static size_t stmt_siz;
 
 /* pointer to the beginning of the "VALUES" part */
 static char *stmt_val;
@@ -97,6 +101,12 @@ static config_entry_t port_ce = {
 
 static unsigned char pgsql_have_schemas;
 
+#define STMT_ADD(pos,fmt...) \
+	do { \
+		if ((pos) >= stmt && stmt_siz > (pos) - stmt) \
+			snprintf((pos), stmt_siz-((pos)-stmt), ##fmt); \
+	} while(0)
+
 /* our main output function, called by ulogd */
 static int pgsql_output(ulog_iret_t *result)
 {
@@ -107,6 +117,10 @@ static int pgsql_output(ulog_iret_t *result)
 	char *tmpstr;		/* need this for --log-ip-as-string */
 	struct in_addr addr;
 #endif
+	size_t esclen;
+
+	if( stmt_val == NULL)
+		return 1;
 
 	stmt_ins = stmt_val;
 
@@ -120,62 +134,78 @@ static int pgsql_output(ulog_iret_t *result)
 
 		if (!res || !IS_VALID((*res))) {
 			/* no result, we have to fake something */
-			sprintf(stmt_ins, "NULL,");
+			STMT_ADD(stmt_ins, "NULL,");
 			stmt_ins = stmt + strlen(stmt);
 			continue;
 		}
 
 		switch (res->type) {
 			case ULOGD_RET_INT8:
-				sprintf(stmt_ins, "%d,", res->value.i8);
+				STMT_ADD(stmt_ins, "%d,", res->value.i8);
 				break;
 			case ULOGD_RET_INT16:
-				sprintf(stmt_ins, "%d,", res->value.i16);
+				STMT_ADD(stmt_ins, "%d,", res->value.i16);
 				break;
 			case ULOGD_RET_INT32:
-				sprintf(stmt_ins, "%d,", res->value.i32);
+				STMT_ADD(stmt_ins, "%d,", res->value.i32);
 				break;
 			case ULOGD_RET_INT64:
-				sprintf(stmt_ins, "%lld,", res->value.i64);
+				STMT_ADD(stmt_ins, "%"PRId64",",res->value.i64);
 				break;
 			case ULOGD_RET_UINT8:
-				sprintf(stmt_ins, "%u,", res->value.ui8);
+				STMT_ADD(stmt_ins, "%u,", res->value.ui8);
 				break;
 			case ULOGD_RET_UINT16:
-				sprintf(stmt_ins, "%u,", res->value.ui16);
+				STMT_ADD(stmt_ins, "%u,", res->value.ui16);
 				break;
 			case ULOGD_RET_IPADDR:
 #ifdef IP_AS_STRING
-				*stmt_ins++ = '\'';
-				memset(&addr, 0, sizeof(addr));
-				addr.s_addr = ntohl(res->value.ui32);
-				tmpstr = (char *)inet_ntoa(addr);
-				PQescapeString(stmt_ins,tmpstr,strlen(tmpstr)); 
-				stmt_ins = stmt + strlen(stmt);
-				sprintf(stmt_ins, "',");
-				break;
+				if (f->str) {
+					addr.s_addr = ntohl(res->value.ui32);
+					tmpstr = (char *)inet_ntoa(addr);
+					esclen = (strlen(tmpstr)*2) + 4;
+					if (stmt_siz <= (stmt_ins-stmt)+esclen)
+					{
+						STMT_ADD(stmt_ins,"'',");
+						break;
+					}
+					*stmt_ins++ = '\'';
+					PQescapeString(stmt_ins,tmpstr,
+							strlen(tmpstr)); 
+					stmt_ins = stmt + strlen(stmt);
+					STMT_ADD(stmt_ins, "',");
+					break;
+				}
 #endif /* IP_AS_STRING */
 				/* EVIL: fallthrough when logging IP as
 				 * u_int32_t */
 
 			case ULOGD_RET_UINT32:
-				sprintf(stmt_ins, "%u,", res->value.ui32);
+				STMT_ADD(stmt_ins, "%u,", res->value.ui32);
 				break;
 			case ULOGD_RET_UINT64:
-				sprintf(stmt_ins, "%llu,", res->value.ui64);
+				STMT_ADD(stmt_ins,"%"PRIu64",",res->value.ui64);
 				break;
 			case ULOGD_RET_BOOL:
-				sprintf(stmt_ins, "'%d',", res->value.b);
+				STMT_ADD(stmt_ins, "'%d',", res->value.b);
 				break;
 			case ULOGD_RET_STRING:
+				esclen = (strlen(res->value.ptr)*2) + 4;
+				if (stmt_siz <= (stmt_ins-stmt) + esclen) {
+					STMT_ADD(stmt_ins, "'',");
+					break;
+				}
 				*stmt_ins++ = '\'';
-				PQescapeString(stmt_ins,res->value.ptr,strlen(res->value.ptr)); 
+				PQescapeString(stmt_ins,res->value.ptr,
+						strlen(res->value.ptr)); 
 				stmt_ins = stmt + strlen(stmt);
-				sprintf(stmt_ins, "',");
+				STMT_ADD(stmt_ins, "',");
 				break;
 			case ULOGD_RET_RAW:
-				ulogd_log(ULOGD_NOTICE,"%s: pgsql doesn't support type RAW\n",res->key);
-				sprintf(stmt_ins, "NULL,");
+				ulogd_log(ULOGD_NOTICE,
+					"%s: pgsql doesn't support type RAW\n",
+					res->key);
+				STMT_ADD(stmt_ins, "NULL,");
 				break;
 			default:
 				ulogd_log(ULOGD_NOTICE,
@@ -186,6 +216,7 @@ static int pgsql_output(ulog_iret_t *result)
 		stmt_ins = stmt + strlen(stmt);
 	}
 	*(stmt_ins - 1) = ')';
+
 	DEBUGP("stmt=#%s#\n", stmt);
 
 	/* now we have created our statement, insert it */
@@ -202,17 +233,20 @@ static int pgsql_output(ulog_iret_t *result)
 	return 0;
 }
 
-#define PGSQL_HAVE_NAMESPACE_TEMPLATE "SELECT nspname FROM pg_namespace n WHERE n.nspname='%s'"
+#define PGSQL_HAVE_NAMESPACE_TEMPLATE \
+	"SELECT nspname FROM pg_namespace n WHERE n.nspname='%s'"
 
 /* Determine if server support schemas */
 static int pgsql_namespace(void) {
 	PGresult *result;
-	char pgbuf[strlen(PGSQL_HAVE_NAMESPACE_TEMPLATE)+strlen(schema_ce.u.string)+1];
+	char pgbuf[strlen(PGSQL_HAVE_NAMESPACE_TEMPLATE)+
+		   	strlen(schema_ce.u.string)+1];
 
 	if (!dbh)
 		return 1;
 
-	sprintf(pgbuf, PGSQL_HAVE_NAMESPACE_TEMPLATE, schema_ce.u.string);
+	snprintf(pgbuf, sizeof(pgbuf), PGSQL_HAVE_NAMESPACE_TEMPLATE,
+			schema_ce.u.string);
 	ulogd_log(ULOGD_DEBUG, "%s\n", pgbuf);
 	
 	result = PQexec(dbh, pgbuf);
@@ -240,7 +274,6 @@ static int pgsql_namespace(void) {
 static int pgsql_createstmt(void)
 {
 	struct _field *f;
-	unsigned int size;
 	char buf[ULOGD_MAX_KEYLEN];
 	char *underscore;
 
@@ -251,41 +284,47 @@ static int pgsql_createstmt(void)
 	}
 
 	/* caclulate the size for the insert statement */
-	size = strlen(PGSQL_INSERTTEMPL) + strlen(table_ce.u.string) + strlen(schema_ce.u.string) + 1;
+	stmt_siz = strlen(PGSQL_INSERTTEMPL) +
+		   strlen(table_ce.u.string) +
+		   strlen(schema_ce.u.string) + 1;
 
 	for (f = fields; f; f = f->next) {
 		/* we need space for the key and a comma, as well as
 		 * enough space for the values */
-		size += strlen(f->name) + 1 + PGSQL_VALSIZE;
+		stmt_siz += strlen(f->name) + 1 + PGSQL_VALSIZE;
 	}
 
-	ulogd_log(ULOGD_DEBUG, "allocating %u bytes for statement\n", size);
+	ulogd_log(ULOGD_DEBUG, "allocating %u bytes for statement\n", stmt_siz);
 
-	stmt = (char *) malloc(size);
+	stmt = (char *) malloc(stmt_siz);
 
 	if (!stmt) {
+		stmt_siz = 0;
 		ulogd_log(ULOGD_ERROR, "OOM!\n");
 		return 1;
 	}
 
 	if (pgsql_have_schemas) {
-		sprintf(stmt, "insert into %s.%s (", schema_ce.u.string, table_ce.u.string);
+		snprintf(stmt, stmt_siz, "insert into %s.%s (",
+			schema_ce.u.string, table_ce.u.string);
 	} else {
-		sprintf(stmt, "insert into %s (", table_ce.u.string);
+		snprintf(stmt, stmt_siz, "insert into %s (",
+			table_ce.u.string);
 	}
 
 	stmt_val = stmt + strlen(stmt);
 
 	for (f = fields; f; f = f->next) {
-		strncpy(buf, f->name, ULOGD_MAX_KEYLEN);
+		strncpy(buf, f->name, ULOGD_MAX_KEYLEN-1);
+		buf[ULOGD_MAX_KEYLEN-1] = '\0';
 		while ((underscore = strchr(buf, '.')))
 			*underscore = '_';
-		sprintf(stmt_val, "%s,", buf);
+		STMT_ADD(stmt_val, "%s,", buf);
 		stmt_val = stmt + strlen(stmt);
 	}
 	*(stmt_val - 1) = ')';
 
-	sprintf(stmt_val, " values (");
+	STMT_ADD(stmt_val, " values (");
 	stmt_val = stmt + strlen(stmt);
 
 	ulogd_log(ULOGD_DEBUG, "stmt='%s'\n", stmt);
@@ -293,28 +332,40 @@ static int pgsql_createstmt(void)
 	return 0;
 }
 
-#define PGSQL_GETCOLUMN_TEMPLATE "SELECT  a.attname FROM pg_class c, pg_attribute a WHERE c.relname ='%s' AND a.attnum>0 AND a.attrelid=c.oid ORDER BY a.attnum"
+#define PGSQL_GETCOLUMN_TEMPLATE \
+	"SELECT  a.attname,t.typname FROM pg_class c, pg_attribute a, "\
+	"pg_type t WHERE c.relname ='%s' AND a.attnum>0 AND a.attrelid="\
+	"c.oid AND a.atttypid=t.oid ORDER BY a.attnum"
 
-#define PGSQL_GETCOLUMN_TEMPLATE_SCHEMA "SELECT a.attname FROM pg_attribute a, pg_class c LEFT JOIN pg_namespace n ON c.relnamespace=n.oid WHERE c.relname ='%s' AND n.nspname='%s' AND a.attnum>0 AND a.attrelid=c.oid AND a.attisdropped=FALSE ORDER BY a.attnum"
+#define PGSQL_GETCOLUMN_TEMPLATE_SCHEMA "SELECT a.attname,t.typname FROM "\
+	"pg_attribute a, pg_type t, pg_class c LEFT JOIN pg_namespace n ON "\
+	"c.relnamespace=n.oid WHERE c.relname ='%s' AND n.nspname='%s' AND "\
+	"a.attnum>0 AND a.attrelid=c.oid AND a.atttypid=t.oid AND "\
+	"a.attisdropped=FALSE ORDER BY a.attnum"
 
 /* find out which columns the table has */
 static int pgsql_get_columns(const char *table)
 {
 	PGresult *result;
 	char buf[ULOGD_MAX_KEYLEN];
-	char pgbuf[strlen(PGSQL_GETCOLUMN_TEMPLATE_SCHEMA)+strlen(table)+strlen(schema_ce.u.string)+2];
+	char pgbuf[strlen(PGSQL_GETCOLUMN_TEMPLATE_SCHEMA)+
+		   strlen(table)+strlen(schema_ce.u.string)+2];
 	char *underscore;
 	struct _field *f;
 	int id;
 	int intaux;
+	char *typename;
 
 	if (!dbh)
 		return 1;
 
 	if (pgsql_have_schemas) {
-		snprintf(pgbuf, sizeof(pgbuf)-1, PGSQL_GETCOLUMN_TEMPLATE_SCHEMA, table, schema_ce.u.string);
+		snprintf(pgbuf, sizeof(pgbuf)-1,
+			PGSQL_GETCOLUMN_TEMPLATE_SCHEMA,
+			table, schema_ce.u.string);
 	} else {
-		snprintf(pgbuf, sizeof(pgbuf)-1, PGSQL_GETCOLUMN_TEMPLATE, table);
+		snprintf(pgbuf, sizeof(pgbuf)-1,
+			PGSQL_GETCOLUMN_TEMPLATE, table);
 	}
 
 	ulogd_log(ULOGD_DEBUG, "%s\n", pgbuf);
@@ -333,7 +384,8 @@ static int pgsql_get_columns(const char *table)
 	for (intaux=0; intaux<PQntuples(result); intaux++) {
 
 		/* replace all underscores with dots */
-		strncpy(buf, PQgetvalue(result, intaux, 0), ULOGD_MAX_KEYLEN);
+		strncpy(buf, PQgetvalue(result, intaux, 0), ULOGD_MAX_KEYLEN-1);
+		buf[ULOGD_MAX_KEYLEN-1] = '\0';
 		while ((underscore = strchr(buf, '_')))
 			*underscore = '.';
 
@@ -352,8 +404,16 @@ static int pgsql_get_columns(const char *table)
 			ulogd_log(ULOGD_ERROR, "OOM!\n");
 			return 1;
 		}
-		strncpy(f->name, buf, ULOGD_MAX_KEYLEN);
+		strncpy(f->name, buf, ULOGD_MAX_KEYLEN-1);
+		f->name[ULOGD_MAX_KEYLEN-1] = '\0';
 		f->id = id;
+		f->str = 0;
+		if( (typename = PQgetvalue(result, intaux, 1)) != NULL)
+		{
+			if(strcmp(typename, "inet") == 0 ||
+			   strstr(typename, "char") != NULL)
+				f->str = 1;
+		}
 		f->next = fields;
 		fields = f;
 	}
@@ -386,34 +446,37 @@ static int pgsql_open_db(char *server, int port, char *user, char *pass,
 	if (port)
 		len += 20;
 
-	connstr = (char *) malloc(len);
+	connstr = (char *) malloc(len+1);
 	if (!connstr)
 		return 1;
+	*connstr = '\0';
 
 	if (server) {
-		strcpy(connstr, " host=");
-		strcat(connstr, server);
+		strncat(connstr, " host=", len-strlen(connstr));
+		strncat(connstr, server, len-strlen(connstr));
 	}
 
 	if (port) {
 		char portbuf[20];
 		snprintf(portbuf, sizeof(portbuf), " port=%u", port);
-		strcat(connstr, portbuf);
+		strncat(connstr, portbuf, len-strlen(connstr));
 	}
 
-	strcat(connstr, " dbname=");
-	strcat(connstr, db);
-	strcat(connstr, " user=");
-	strcat(connstr, user);
+	strncat(connstr, " dbname=", len-strlen(connstr));
+	strncat(connstr, db, len-strlen(connstr));
+	strncat(connstr, " user=", len-strlen(connstr));
+	strncat(connstr, user, len-strlen(connstr));
 
 	if (pass) {
-		strcat(connstr, " password=");
-		strcat(connstr, pass);
+		strncat(connstr, " password=", len-strlen(connstr));
+		strncat(connstr, pass, len-strlen(connstr));
 	}
 	
 	dbh = PQconnectdb(connstr);
+	free(connstr);
 	if (PQstatus(dbh)!=CONNECTION_OK) {
 		exit_nicely(dbh);
+		dbh = NULL;
 		return 1;
 	}
 
@@ -432,23 +495,39 @@ static int pgsql_init(void)
 	}
 
 	if (pgsql_namespace()) {
-		return 1;
+		PQfinish(dbh);
+		dbh = NULL;
 		ulogd_log(ULOGD_ERROR, "unable to test for pgsql schemas\n");
+		return 1;
 	}
 
 	/* read the fieldnames to know which values to insert */
 	if (pgsql_get_columns(table_ce.u.string)) {
+		PQfinish(dbh);
+		dbh = NULL;
 		ulogd_log(ULOGD_ERROR, "unable to get pgsql columns\n");
 		return 1;
 	}
-	pgsql_createstmt();
+
+	if (pgsql_createstmt()) {
+		PQfinish(dbh);
+		dbh = NULL;
+		return 1;
+	}
 
 	return 0;
 }
 
 static void pgsql_fini(void)
 {
-	PQfinish(dbh);
+	if (dbh)
+		PQfinish(dbh);
+	if (stmt)
+	{
+		free(stmt);
+		stmt = NULL;
+		stmt_val = NULL;
+	}
 }
 
 static ulog_output_t pgsql_plugin = { 
