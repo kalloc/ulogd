@@ -407,6 +407,9 @@ static int mysql_get_columns(const char *table)
 static int mysql_open_db(char *server, int port, char *user, char *pass, 
 			 char *db)
 {
+#ifdef MYSQL_OPT_RECONNECT
+	my_bool trueval = 1;
+#endif 
 	dbh = mysql_init(NULL);
 	if (!dbh)
 		return -1;
@@ -415,11 +418,24 @@ static int mysql_open_db(char *server, int port, char *user, char *pass,
 		mysql_options(dbh, MYSQL_OPT_CONNECT_TIMEOUT,
 			(const char *) &connect_timeout_ce.u.value);
 
+#ifdef MYSQL_OPT_RECONNECT
+#  if defined(MYSQL_VERSION_ID) && (MYSQL_VERSION_ID >= 50019)
+	mysql_options(dbh, MYSQL_OPT_RECONNECT, &trueval);
+#  endif
+#endif 
+
+
 	if (!mysql_real_connect(dbh, server, user, pass, db, port, NULL, 0))
 	{
 		_mysql_fini();
 		return -1;
 	}
+
+#ifdef MYSQL_OPT_RECONNECT
+#  if defined(MYSQL_VERSION_ID) && (MYSQL_VERSION_ID < 50019)
+	mysql_options(dbh, MYSQL_OPT_RECONNECT, &trueval);
+#  endif
+#endif
 
 	return 0;
 }
