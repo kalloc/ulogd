@@ -82,8 +82,12 @@ static ulog_iret_t *_interp_raw(ulog_interpreter_t *ip,
 		for (i = 0; i < pkt->mac_len; i++, p++) {
 			tmp = snprintf(ptr+len, siz-len, "%02x%s", 
 					*p, i==pkt->mac_len-1 ? "":":");
-			if (tmp > siz-len)
+			if (tmp < 0)
 				break;
+			if (tmp >= siz-len) {
+				buf[siz] = '\0';
+				break;
+			}
 			len += tmp;
 		}
 		ret[0].value.ptr = buf;
