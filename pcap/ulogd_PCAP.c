@@ -131,7 +131,7 @@ static int pcap_output(ulog_iret_t *res)
 {
 	struct pcap_sf_pkthdr pchdr;
 
-	pchdr.caplen = GET_VALUE(1).ui32;
+	pchdr.caplen = GET_VALUE(2).ui32;
 	pchdr.len = GET_VALUE(2).ui32;
 
 	if (GET_FLAGS(3) & ULOGD_RETF_VALID
