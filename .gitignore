@@ -1,0 +1,13 @@
+*.o
+*.so
+*.swp
+Makefile
+config.log
+config.status
+configure
+core
+*.a
+ulogd
+autom4te.cache
+Rules.make
+ulogd.conf
