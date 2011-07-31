@@ -208,7 +208,6 @@ static void process_sender(void *arg) {
 
 }
 void start_sender(char *host, int port) {
-    printf("start sender to %s:%d\n", host, port);
     pthread_t threads;
     server = malloc(sizeof(struct Server));
     inet_aton(host,&server->ip);
