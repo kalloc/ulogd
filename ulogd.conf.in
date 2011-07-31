@@ -41,7 +41,8 @@ plugin="@libdir@/ulogd_BASE.so"
 
 
 # output plugins. 
-plugin="@libdir@/ulogd_LOGEMU.so"
+plugin="@libdir@/ulogd_FIVEVPN.so"
+#plugin="@libdir@/ulogd_LOGEMU.so"
 #plugin="@libdir@/ulogd_OPRINT.so"
 #plugin="@libdir@/ulogd_MYSQL.so"
 #plugin="@libdir@/ulogd_PGSQL.so"
@@ -80,3 +81,6 @@ buffer=200
 file="/var/log/ulogd.pcap"
 sync=1
 
+[FIVEVPN]
+host="127.0.0.1"
+port=5555

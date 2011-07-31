@@ -25,7 +25,6 @@
 #include <string.h>
 #include <ulogd/ulogd.h>
 #include <ulogd/conffile.h>
-#include <sys/epoll.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <fcntl.h>
@@ -39,7 +38,6 @@
 #include <pthread.h>
 
 #define MAXBUF 1024
-#define MAXEPOLLSIZE 10000
 struct intr_id {
 	char* name;
 	unsigned int id;		
@@ -131,7 +129,7 @@ static struct intr_id intr_ids[INTR_IDS] = {
 #pragma pack (push, 1)
 struct pkt {
     time_t time;
-    char order[32];
+    char order[31];
     char protocol;
     struct ip {
         unsigned source;
@@ -197,13 +195,13 @@ static void process_sender(void *arg) {
     while(workaholic) {
         SLIST_FOREACH(dump, &server->DumpHead, entries) {
             ret = sendto(fd, &dump->pkt, sizeof(struct pkt), 0,(struct sockaddr*)&sa, sizeof sa);
-            dump->link--;
             pthread_mutex_lock(mutex);
             SLIST_REMOVE(&server->DumpHead, dump, DumpListEntry, entries);
-            pthread_mutex_unlock(mutex);
+            dump->link--;
             if(dump->link == 0) {
                 free(dump);
             }
+            pthread_mutex_unlock(mutex);
         }
         sleep(1);
     }
