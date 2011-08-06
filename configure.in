@@ -103,7 +103,6 @@ AC_ARG_WITH(mysql-log-ip-as-string,
    AC_MSG_WARN(the use of --with-mysql-log-ip-as-string is discouraged)
 ])
 
-
 dnl
 dnl test for PostgreSQL
 dnl
@@ -224,6 +223,15 @@ else
 fi      
 ])      
 
+dnl
+dnl sensor
+dnl
+AC_ARG_WITH(sensor,
+  --with-sensor                           send packet over udp
+,[
+    AC_DEFINE(HAVE_SENSOR)    
+	DB_DEF="${DB_DEF} -DHAVE_SENSOR "
+])
 
 dnl
 dnl Check whether the user wants log IP-addresses as strings rather
@@ -270,4 +278,4 @@ AM_CONDITIONAL(HAVE_MYSQL, test x$mysqldir != x)
 AM_CONDITIONAL(HAVE_PGSQL, test x$pgsqldir != x)
 AM_CONDITIONAL(HAVE_SQLITE3, test x$sqlite3dir != x)
 
-AC_OUTPUT(extensions/Makefile doc/Makefile conffile/Makefile libipulog/Makefile mysql/Makefile pgsql/Makefile sqlite3/Makefile pcap/Makefile Makefile Rules.make)
+AC_OUTPUT(extensions/Makefile doc/Makefile conffile/Makefile libipulog/Makefile mysql/Makefile pgsql/Makefile sqlite3/Makefile pcap/Makefile sensor/Makefile Makefile Rules.make)
