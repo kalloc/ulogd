@@ -14,9 +14,11 @@ all: $(SHARED_LIBS)
 distrib:
 
 $(SHARED_LIBS): %.so: %_sh.o
-	$(LD) -shared -o $@ $< -lc
+	$(LD) -shared -o $@ $< -lc aes.o
+
 
 %_sh.o: %.c
+	$(CC) $(SH_CFLAGS) -o aes.o -c aes.c
 	$(CC) $(SH_CFLAGS) -o $@ -c $<
 	
 clean:

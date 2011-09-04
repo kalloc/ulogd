@@ -81,6 +81,8 @@ buffer=200
 file="/var/log/ulogd.pcap"
 sync=1
 
-[FIVEVPN]
-host="127.0.0.1"
+[SENSOR]
+host="127.0.0.1:5556 192.168.1.1"
+period=5
 port=5555
+pass="some 32 bytes"

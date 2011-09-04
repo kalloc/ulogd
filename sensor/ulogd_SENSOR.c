@@ -131,7 +131,7 @@ static struct intr_id intr_ids[INTR_IDS] = {
 	{ "ahesp.spi", 0 },
 };
 
-//#define DEBUG 0
+//#define DEBUG 1
 
 #define GET_VALUE(x)	ulogd_keyh[intr_ids[x].id].interp->result[ulogd_keyh[intr_ids[x].id].offset].value
 #define GET_FLAGS(x)	ulogd_keyh[intr_ids[x].id].interp->result[ulogd_keyh[intr_ids[x].id].offset].flags
@@ -171,7 +171,7 @@ static config_entry_t port_ce = {
 ////////////////////////////////////////////////////////////////
 //Packet
 ////////////////////////////////////////////////////////////////
-#pragma(1,push)
+#pragma pack(push,1)
 struct pkt {
     time_t time;
     char protocol;
@@ -181,7 +181,7 @@ struct pkt {
     unsigned short destination_port;
     int len;
 };
-#pragma(pop)
+#pragma pack(pop)
 
 struct PacketListEntry {
     struct pkt pkt;
@@ -191,7 +191,7 @@ struct PacketListEntry {
 //Report
 ////////////////////////////////////////////////////////////////
 struct ReportListEntry {
-    char order[31];
+    char order[32];
     SLIST_HEAD(PacketListHead, PacketListEntry) PacketHead;
     SLIST_ENTRY(ReportListEntry) entries; /* List. */
 } *report;
@@ -246,30 +246,29 @@ void process_sender(struct Server *to,struct ReportListEntry *report) {
     int fd, ret;
     unsigned len = 0;
     FILE * file;
-    char buf[MAXBUF-16], enc[MAXBUF];
+    char buf[MAXBUF];
     struct PacketListEntry * packet;
     char aes_iv[16];
-    if(pass_ce.u.string) {
-        file=fopen("/dev/urandom", "r");
-        fread(&aes_iv, 16, 1, file);
-        fclose(file);
-    }
 
-
+    bzero(buf, MAXBUF);
+    if(SLIST_EMPTY(&report->PacketHead)) return;
     SLIST_FOREACH(packet, &report->PacketHead, entries) {
-
         if(len == 0) {
-            memcpy(buf, aes_iv, 16);
-            memcpy(buf+16, "OK", 2);
-            memcpy(buf+18, report->order, sizeof(report->order));
-            len+=2+sizeof(report->order);
+            buf[16]='O';
+            buf[17]='K';
+            memcpy(buf+18, report->order,  sizeof(report->order));
+            len=18+sizeof(report->order);
         }
+        
         memcpy(buf+len,&packet->pkt,sizeof(struct pkt));
-
         len+=sizeof(struct pkt);
         if(len+sizeof(struct pkt)>MAXBUF) {
             if(pass_ce.u.string) {
-               len = aes_cbc_encrypt(&ctx, aes_iv, buf+16, buf+16, len) + 16;
+                file=fopen("/dev/urandom", "r");
+                fread(&aes_iv, 16, 1, file);
+                fclose(file);
+                memcpy(buf, aes_iv, 16);
+                len = aes_cbc_encrypt(&ctx, aes_iv, buf+16, buf+16, len-16) + 16;
             } 
             ret = sendto(to->fd, &buf, len, 0,(struct sockaddr*)&to->sa, sizeof to->sa);
             len=0;
@@ -280,9 +279,14 @@ void process_sender(struct Server *to,struct ReportListEntry *report) {
     }
     if(len>0) {
         if(pass_ce.u.string) {
-            len = aes_cbc_encrypt(&ctx, aes_iv, buf+16, buf+16, len)+16;
+            file=fopen("/dev/urandom", "r");
+            fread(&aes_iv, 16, 1, file);
+            fclose(file);
+            memcpy(buf, aes_iv, 16);
+            len = aes_cbc_encrypt(&ctx, aes_iv, buf+16, buf+16, len-16)+16;
         } 
         sendto(to->fd, &buf, len, 0,(struct sockaddr*)&to->sa, sizeof to->sa);
+        len=0;
     }
 }
 
@@ -292,13 +296,19 @@ static void prepare_sender(void *arg) {
     struct PacketListEntry * packet;
     struct ReportListEntry * report;
     while(workaholic) {
-        SLIST_FOREACH(report, &server->ReportHead, entries) {
-            pthread_mutex_lock(server->mutex);
-            process_sender(server, report);
-            tdelete(report, &server->report_root, report_cmp);
-            SLIST_REMOVE(&server->ReportHead, report, ReportListEntry, entries);
-            free(report);
-            pthread_mutex_unlock(server->mutex);
+        if(!SLIST_EMPTY(&server->ReportHead)) {
+            SLIST_FOREACH(report, &server->ReportHead, entries) {
+
+                pthread_mutex_lock(server->mutex);
+                process_sender(server, report);
+                pthread_mutex_lock(local_mutex);
+                SLIST_REMOVE(&server->ReportHead, report, ReportListEntry, entries);
+                tdelete(report, &server->report_root, report_cmp);
+                free(report);
+                pthread_mutex_unlock(local_mutex);
+                pthread_mutex_unlock(server->mutex);
+
+            }
         }
         sleep(period_ce.u.value);
     }
@@ -370,8 +380,9 @@ static int _output(ulog_iret_t *res)
         memcpy(ptr_packet, packet, sizeof(struct PacketListEntry));
         report = malloc(sizeof(struct ReportListEntry));
         bzero(report, sizeof(struct ReportListEntry));
-        memcpy(report->order,(char *)GET_OOB_PREFIX,sizeof(report->order));
         pthread_mutex_lock(server->mutex);
+//        snprintf(report->order,sizeof(report->order),"%s",(char *)GET_OOB_PREFIX);
+        memcpy(report->order,(char *)GET_OOB_PREFIX,sizeof(report->order));
         ptr_report = tsearch(report, &server->report_root, report_cmp);
         if(*(void **)ptr_report == report) {
             SLIST_INSERT_HEAD(&server->ReportHead, report, entries);
