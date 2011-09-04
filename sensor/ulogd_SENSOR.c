@@ -1,4 +1,4 @@
-/* ulogd_FIVEVPN.c, Version $Revision$
+/* ulogd_SENSOR.c, Version $Revision$
  *
  * (C) 2011 by kalloc
  *
@@ -35,14 +35,25 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/queue.h>
+#include <search.h>
 #include <pthread.h>
+#include "aes.h"
 
+int workaholic=1;
+
+////////////////////////////////////////////////////////////////
+//aes
+////////////////////////////////////////////////////////////////
+aes_context ctx;
+
+////////////////////////////////////////////////////////////////
+//config
+////////////////////////////////////////////////////////////////
 #define MAXBUF 1024
 struct intr_id {
 	char* name;
 	unsigned int id;		
 };
-int workaholic=1;
 #define INTR_IDS 	35
 //easy idx
 #define GET_OOB_TIME_SEC GET_VALUE(0).ui32
@@ -120,45 +131,96 @@ static struct intr_id intr_ids[INTR_IDS] = {
 	{ "ahesp.spi", 0 },
 };
 
+//#define DEBUG 0
+
 #define GET_VALUE(x)	ulogd_keyh[intr_ids[x].id].interp->result[ulogd_keyh[intr_ids[x].id].offset].value
 #define GET_FLAGS(x)	ulogd_keyh[intr_ids[x].id].interp->result[ulogd_keyh[intr_ids[x].id].offset].flags
-#define ULOGD_FIVEVPN_DEFAULT_HOST "127.0.0.1"
-#define ULOGD_FIVEVPN_DEFAULT_PORT 5555
+#define ULOGD_SENSOR_DEFAULT_HOST "127.0.0.1"
+#define ULOGD_SENSOR_DEFAULT_PORT 5555
 
-//dump
-#pragma pack (push, 1)
+static config_entry_t host_ce = { 
+    .key = "host", 
+    .type = CONFIG_TYPE_STRING, 
+    .options = CONFIG_OPT_NONE, 
+	.u = { .string = ULOGD_SENSOR_DEFAULT_HOST } 
+};
+
+static config_entry_t pass_ce = { 
+    .next = &host_ce, 
+    .key = "pass", 
+    .type = CONFIG_TYPE_STRING, 
+    .options = CONFIG_OPT_NONE, 
+	.u = { .string = NULL }
+};
+
+static config_entry_t period_ce = { 
+    .next = &pass_ce, 
+    .key = "period", 
+    .type = CONFIG_TYPE_INT, 
+    .options = CONFIG_OPT_NONE, 
+	.u = { .value = 60 }
+};
+static config_entry_t port_ce = { 
+    .next = &period_ce, 
+    .key = "port", 
+    .type = CONFIG_TYPE_INT, 
+    .options = CONFIG_OPT_NONE, 
+	.u = { .value = ULOGD_SENSOR_DEFAULT_PORT }
+};
+
+////////////////////////////////////////////////////////////////
+//Packet
+////////////////////////////////////////////////////////////////
+#pragma(1,push)
 struct pkt {
     time_t time;
-    char order[31];
     char protocol;
-    struct ip {
-        unsigned source;
-        unsigned destination;
-    } ip;
-    unsigned short sport;
-    unsigned short dport;
+    unsigned source_ip;
+    unsigned destination_ip;
+    unsigned short source_port;
+    unsigned short destination_port;
     int len;
 };
-#pragma push
+#pragma(pop)
 
-struct DumpListEntry {
+struct PacketListEntry {
     struct pkt pkt;
-    int link;
-    SLIST_ENTRY(DumpListEntry) entries; /* List. */
+    SLIST_ENTRY(PacketListEntry) entries; /* List. */
 };
+////////////////////////////////////////////////////////////////
+//Report
+////////////////////////////////////////////////////////////////
+struct ReportListEntry {
+    char order[31];
+    SLIST_HEAD(PacketListHead, PacketListEntry) PacketHead;
+    SLIST_ENTRY(ReportListEntry) entries; /* List. */
+} *report;
 
-//Servers
+
+////////////////////////////////////////////////////////////////
+//Server
+////////////////////////////////////////////////////////////////
 struct Server {
     struct in_addr ip;
     int port;
-    pthread_t thread_id;        /* ID returned by pthread_create() */
-    SLIST_HEAD(DumpListHead, DumpListEntry) DumpHead;
-    SLIST_ENTRY(Server) entries; /* List. */
-} *server;
-
-static pthread_mutex_t *mutex = NULL;
-
+    int fd;
+    struct sockaddr_in sa;
+    char *host;
+    void *report_root;
+    pthread_mutex_t *mutex;
+    SLIST_HEAD(ReportListHead, ReportListEntry) ReportHead;
+    SLIST_ENTRY(Server) entries;
+};
 SLIST_HEAD(ServerListHead, Server) ServerHead;
+////////////////////////////////////////////////////////////////
+static pthread_mutex_t  *local_mutex = NULL;
+
+int report_cmp(const void *a, const void *b) {
+  struct ReportListEntry *left, *right;
+  left = (struct ReportListEntry *)a;
+  right = (struct ReportListEntry *)b;
+  return strcmp(left->order, right->order);
+}
 
 
 
@@ -180,78 +242,148 @@ static int get_ids(void) {
     }	
     return 0;
 }
-
-static void process_sender(void *arg) {
-    struct DumpListEntry *dump;
-    struct sockaddr_in sa;
+void process_sender(struct Server *to,struct ReportListEntry *report) {
     int fd, ret;
-    struct Server *server = (struct Server *) arg;
-    fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    sa.sin_family = AF_INET;
-    sa.sin_addr = server->ip;
-    sa.sin_port = htons(server->port);
-
-
-    while(workaholic) {
-        SLIST_FOREACH(dump, &server->DumpHead, entries) {
-            ret = sendto(fd, &dump->pkt, sizeof(struct pkt), 0,(struct sockaddr*)&sa, sizeof sa);
-            pthread_mutex_lock(mutex);
-            SLIST_REMOVE(&server->DumpHead, dump, DumpListEntry, entries);
-            dump->link--;
-            if(dump->link == 0) {
-                free(dump);
-            }
-            pthread_mutex_unlock(mutex);
-        }
-        sleep(1);
+    unsigned len = 0;
+    FILE * file;
+    char buf[MAXBUF-16], enc[MAXBUF];
+    struct PacketListEntry * packet;
+    char aes_iv[16];
+    if(pass_ce.u.string) {
+        file=fopen("/dev/urandom", "r");
+        fread(&aes_iv, 16, 1, file);
+        fclose(file);
     }
 
+
+    SLIST_FOREACH(packet, &report->PacketHead, entries) {
+
+        if(len == 0) {
+            memcpy(buf, aes_iv, 16);
+            memcpy(buf+16, "OK", 2);
+            memcpy(buf+18, report->order, sizeof(report->order));
+            len+=2+sizeof(report->order);
+        }
+        memcpy(buf+len,&packet->pkt,sizeof(struct pkt));
+
+        len+=sizeof(struct pkt);
+        if(len+sizeof(struct pkt)>MAXBUF) {
+            if(pass_ce.u.string) {
+               len = aes_cbc_encrypt(&ctx, aes_iv, buf+16, buf+16, len) + 16;
+            } 
+            ret = sendto(to->fd, &buf, len, 0,(struct sockaddr*)&to->sa, sizeof to->sa);
+            len=0;
+        }
+
+        SLIST_REMOVE(&report->PacketHead, packet, PacketListEntry, entries);
+        free(packet);
+    }
+    if(len>0) {
+        if(pass_ce.u.string) {
+            len = aes_cbc_encrypt(&ctx, aes_iv, buf+16, buf+16, len)+16;
+        } 
+        sendto(to->fd, &buf, len, 0,(struct sockaddr*)&to->sa, sizeof to->sa);
+    }
+}
+
+
+static void prepare_sender(void *arg) {
+    struct Server *server = (struct Server *) arg;
+    struct PacketListEntry * packet;
+    struct ReportListEntry * report;
+    while(workaholic) {
+        SLIST_FOREACH(report, &server->ReportHead, entries) {
+            pthread_mutex_lock(server->mutex);
+            process_sender(server, report);
+            tdelete(report, &server->report_root, report_cmp);
+            SLIST_REMOVE(&server->ReportHead, report, ReportListEntry, entries);
+            free(report);
+            pthread_mutex_unlock(server->mutex);
+        }
+        sleep(period_ce.u.value);
+    }
+    SLIST_FOREACH(report, &server->ReportHead, entries) {
+        pthread_mutex_lock(server->mutex);
+        SLIST_FOREACH(packet, &report->PacketHead, entries) {
+            SLIST_REMOVE(&report->PacketHead, packet, PacketListEntry, entries);
+            free(packet);
+        }
+        tdelete(report, &server->report_root, report_cmp);
+        SLIST_REMOVE(&server->ReportHead, report, ReportListEntry, entries);
+        free(report);
+        pthread_mutex_unlock(server->mutex);
+        free(server);
+    }
 }
 void start_sender(char *host, int port) {
+
     pthread_t threads;
-    server = malloc(sizeof(struct Server));
+    struct Server * server = malloc(sizeof(struct Server));
+    bzero(server, sizeof(struct Server));
+    server->mutex = calloc(1, sizeof (*server->mutex));
+    pthread_mutex_init(server->mutex, NULL);
+    server->host=strdup(host);
     inet_aton(host,&server->ip);
     server->port=port;
-    SLIST_INIT(&server->DumpHead);
+    server->fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    server->sa.sin_family = AF_INET;
+    server->sa.sin_addr = server->ip;
+    server->sa.sin_port = htons(server->port);
+    SLIST_INIT(&server->ReportHead);
     SLIST_INSERT_HEAD(&ServerHead, server, entries);
-    pthread_create(&threads, NULL, (void*) process_sender, server);
+    pthread_create(&threads, NULL, (void*) prepare_sender, server);
 }
 
 static int _output(ulog_iret_t *res)
 {
 
     if(GET_IP_PROTOCOL != IPPROTO_TCP && GET_IP_PROTOCOL != IPPROTO_UDP) return 0;
-    struct DumpListEntry *entry  = malloc(sizeof(struct DumpListEntry));
-    bzero(entry, sizeof(struct DumpListEntry));  
-    
-    entry->pkt.time  = (time_t) GET_OOB_TIME_SEC;;
-    memcpy(entry->pkt.order,(char *)GET_OOB_PREFIX,sizeof(entry->pkt.order));
-    entry->pkt.protocol = GET_IP_PROTOCOL;
-    entry->pkt.len = GET_IP_TOTLEN;
-    entry->pkt.ip.source = htonl(GET_IP_SADDR);
-    entry->pkt.ip.destination = htonl(GET_IP_DADDR);
+    struct ReportListEntry *report, *ptr_report;
+    struct PacketListEntry *packet = malloc(sizeof(struct PacketListEntry)), *ptr_packet;
+    struct Server *server = NULL;
+    bzero(packet, sizeof(struct PacketListEntry));  
+    packet->pkt.time  = (time_t) GET_OOB_TIME_SEC;;
+    packet->pkt.protocol = GET_IP_PROTOCOL;
+    packet->pkt.len = GET_IP_TOTLEN;
+    packet->pkt.source_ip = htonl(GET_IP_SADDR);
+    packet->pkt.destination_ip = htonl(GET_IP_DADDR);
+
     switch (GET_IP_PROTOCOL) {
         case IPPROTO_TCP:
-            entry->pkt.sport = GET_TCP_SPORT;
-            entry->pkt.dport = GET_TCP_DPORT;
+            packet->pkt.source_port = GET_TCP_SPORT;
+            packet->pkt.destination_port = GET_TCP_DPORT;
             break;
         case IPPROTO_UDP:
-            entry->pkt.sport = GET_UDP_SPORT;
-            entry->pkt.dport = GET_UDP_DPORT;
+            packet->pkt.source_port = GET_UDP_SPORT;
+            packet->pkt.destination_port = GET_UDP_DPORT;
             break;
     }
 #ifdef DEBUG
-    printf("[%s] %d %s:%d -> %s:%d %d bytes\n",entry->pkt.order, entry->pkt.time, 
-		    inet_ntoa((struct in_addr) {entry->pkt.ip.source}), entry->pkt.sport,
-		    inet_ntoa((struct in_addr) {entry->pkt.ip.destination}), entry->pkt.dport,
-            entry->pkt.len);
+    printf("[%s] %d %s:%d -> %s:%d %d bytes\n",(char *)GET_OOB_PREFIX, packet->pkt.time, 
+		    inet_ntoa((struct in_addr) {packet->pkt.source_ip}), packet->pkt.source_port,
+		    inet_ntoa((struct in_addr) {packet->pkt.destination_ip}), packet->pkt.destination_port,
+            packet->pkt.len);
 #endif
+    
     SLIST_FOREACH(server, &ServerHead, entries) {
-        pthread_mutex_lock(mutex);
-        SLIST_INSERT_HEAD(&server->DumpHead, entry, entries);
-        pthread_mutex_unlock(mutex);
-        entry->link++;
+        ptr_packet = malloc(sizeof(struct PacketListEntry));
+        memcpy(ptr_packet, packet, sizeof(struct PacketListEntry));
+        report = malloc(sizeof(struct ReportListEntry));
+        bzero(report, sizeof(struct ReportListEntry));
+        memcpy(report->order,(char *)GET_OOB_PREFIX,sizeof(report->order));
+        pthread_mutex_lock(server->mutex);
+        ptr_report = tsearch(report, &server->report_root, report_cmp);
+        if(*(void **)ptr_report == report) {
+            SLIST_INSERT_HEAD(&server->ReportHead, report, entries);
+            SLIST_INIT(&report->PacketHead);
+        } else {
+            free(report);
+            report = *(void**)ptr_report;
+        }
+        SLIST_INSERT_HEAD(&report->PacketHead, ptr_packet, entries);
+        pthread_mutex_unlock(server->mutex);
     }
+    free(packet);
 
     return 0;
 }
@@ -260,44 +392,53 @@ static int _output(ulog_iret_t *res)
 static void finish(void) {
     workaholic=0;
 }
-static config_entry_t host_ce = { 
-    .key = "host", 
-    .type = CONFIG_TYPE_STRING, 
-    .options = CONFIG_OPT_NONE, 
-	.u = { .string = ULOGD_FIVEVPN_DEFAULT_HOST } 
-};
-
-static config_entry_t port_ce = { 
-    .next = &host_ce, 
-    .key = "port", 
-    .type = CONFIG_TYPE_INT, 
-    .options = CONFIG_OPT_NONE, 
-	.u = { .value = ULOGD_FIVEVPN_DEFAULT_PORT }
-};
 
 static int init(void) {
-    char *ptr,*host;
-    if (!mutex) {
-        mutex = calloc(1, sizeof (*mutex));
-        pthread_mutex_init(mutex, NULL);
+    char *ptr, *port_ptr, *host;
+    char password[17]={0};
+
+    unsigned int port_default, port, is_port=0;
+    if (!local_mutex) {
+        local_mutex = calloc(1, sizeof (*local_mutex));
+        pthread_mutex_init(local_mutex, NULL);
     }
     SLIST_INIT(&ServerHead);
     get_ids();
-    config_parse_file("FIVEVPN", &port_ce);
-    host = ptr = host_ce.u.string;
-    while(*(ptr++)!=0) {
-        if(*ptr == ',' || *ptr == ' ') {
-            *ptr=0;
-            start_sender(host, port_ce.u.value);
-            host=ptr+1;
-        }
+    config_parse_file("SENSOR", &port_ce);
+    if(pass_ce.u.string != NULL) {
+        snprintf(password,17,"%s",pass_ce.u.string);
+        aes_set_key(&ctx, password, 128);
     }
-    start_sender(host, port_ce.u.value);
+
+
+    host = ptr = host_ce.u.string;
+    port_default = port_ce.u.value;
+    while(*(ptr+1)!=0) {
+        if(*ptr == ':')  {
+            is_port = 1;
+            *ptr = 0;
+            port_ptr=++ptr;
+        }
+        else if(*ptr == ',' || *ptr == ' ') {
+            *ptr = 0;
+            if(is_port) {
+                port=atoi(port_ptr);
+                is_port = 0;
+            } else {
+                port = port_default;
+            }
+            start_sender(host, port);
+            ptr++;
+            host=ptr;
+        }
+        ptr++;
+    }
+    start_sender(host, port);
     return 1;
 }
 
 static ulog_output_t fivevpn_op = { 
-    .name = "fivevpn",
+    .name = "sensor",
     .init = &init,
     .fini = &finish,
     .output = &_output, 
