@@ -107,6 +107,8 @@ typedef struct ulog_output {
 	char name[ULOGD_MAX_KEYLEN];
 	/* callback for initialization */
 	int (*init)(void);
+	/* callback for start  */
+	int (*start)(void);
 	/* callback for de-initialization */
 	void (*fini)(void);
 	/* callback function */

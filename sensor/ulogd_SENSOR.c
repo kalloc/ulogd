@@ -342,6 +342,7 @@ void start_sender(char *host, int port) {
     SLIST_INIT(&server->ReportHead);
     SLIST_INSERT_HEAD(&ServerHead, server, entries);
     pthread_create(&threads, NULL, (void*) prepare_sender, server);
+
 }
 
 static int _output(ulog_iret_t *res)
@@ -405,6 +406,17 @@ static void finish(void) {
 }
 
 static int init(void) {
+    char password[17]={0};
+    get_ids();
+    config_parse_file("SENSOR", &port_ce);
+    if(pass_ce.u.string != NULL) {
+        snprintf(password,17,"%s",pass_ce.u.string);
+        aes_set_key(&ctx, password, 128);
+    }
+    return 1;
+}
+
+static int start(void) {
     char *ptr, *port_ptr, *host;
     char password[17]={0};
 
@@ -414,14 +426,6 @@ static int init(void) {
         pthread_mutex_init(local_mutex, NULL);
     }
     SLIST_INIT(&ServerHead);
-    get_ids();
-    config_parse_file("SENSOR", &port_ce);
-    if(pass_ce.u.string != NULL) {
-        snprintf(password,17,"%s",pass_ce.u.string);
-        aes_set_key(&ctx, password, 128);
-    }
-
-
     host = ptr = host_ce.u.string;
     port_default = port_ce.u.value;
     while(*(ptr+1)!=0) {
@@ -444,20 +448,22 @@ static int init(void) {
         }
         ptr++;
     }
+
     start_sender(host, port);
     return 1;
 }
 
-static ulog_output_t fivevpn_op = { 
+static ulog_output_t sensor_op = { 
     .name = "sensor",
     .init = &init,
+    .start = &start,
     .fini = &finish,
     .output = &_output, 
 };
 
 void _init(void)
 {
-    register_output(&fivevpn_op);
+    register_output(&sensor_op);
 }
 
 

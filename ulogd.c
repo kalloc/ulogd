@@ -792,6 +792,11 @@ int main(int argc, char* argv[])
 		fclose(stdin);
 		setsid();
 	}
+	for (p = ulogd_outputs; p; p = p->next) {
+		if (p->start)
+			(*p->start)();
+	}
+
 
 	/* send SIGINT to the term handler, since they hit CTRL-C */
 	signal(SIGINT, &sigterm_handler);
