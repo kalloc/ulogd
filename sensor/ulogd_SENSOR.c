@@ -131,7 +131,7 @@ static struct intr_id intr_ids[INTR_IDS] = {
 	{ "ahesp.spi", 0 },
 };
 
-//#define DEBUG 1
+#define DEBUG 1
 
 #define GET_VALUE(x)	ulogd_keyh[intr_ids[x].id].interp->result[ulogd_keyh[intr_ids[x].id].offset].value
 #define GET_FLAGS(x)	ulogd_keyh[intr_ids[x].id].interp->result[ulogd_keyh[intr_ids[x].id].offset].flags
@@ -181,12 +181,12 @@ struct pkt {
     unsigned short destination_port;
     int len;
 };
-#pragma pack(pop)
 
 struct PacketListEntry {
     struct pkt pkt;
     SLIST_ENTRY(PacketListEntry) entries; /* List. */
 };
+#pragma pack(pop)
 ////////////////////////////////////////////////////////////////
 //Report
 ////////////////////////////////////////////////////////////////
@@ -201,6 +201,7 @@ struct ReportListEntry {
 //Server
 ////////////////////////////////////////////////////////////////
 struct Server {
+    FILE * file;
     struct in_addr ip;
     int port;
     int fd;
@@ -245,7 +246,6 @@ static int get_ids(void) {
 void process_sender(struct Server *to,struct ReportListEntry *report) {
     int fd, ret;
     unsigned len = 0;
-    FILE * file;
     char buf[MAXBUF];
     struct PacketListEntry * packet;
     char aes_iv[16];
@@ -264,9 +264,7 @@ void process_sender(struct Server *to,struct ReportListEntry *report) {
         len+=sizeof(struct pkt);
         if(len+sizeof(struct pkt)>MAXBUF) {
             if(pass_ce.u.string) {
-                file=fopen("/dev/urandom", "r");
-                fread(&aes_iv, 16, 1, file);
-                fclose(file);
+                fread(&aes_iv, 16, 1, to->file);
                 memcpy(buf, aes_iv, 16);
                 len = aes_cbc_encrypt(&ctx, aes_iv, buf+16, buf+16, len-16) + 16;
             } 
@@ -279,9 +277,7 @@ void process_sender(struct Server *to,struct ReportListEntry *report) {
     }
     if(len>0) {
         if(pass_ce.u.string) {
-            file=fopen("/dev/urandom", "r");
-            fread(&aes_iv, 16, 1, file);
-            fclose(file);
+            fread(&aes_iv, 16, 1, to->file);
             memcpy(buf, aes_iv, 16);
             len = aes_cbc_encrypt(&ctx, aes_iv, buf+16, buf+16, len-16)+16;
         } 
@@ -295,6 +291,7 @@ static void prepare_sender(void *arg) {
     struct Server *server = (struct Server *) arg;
     struct PacketListEntry * packet;
     struct ReportListEntry * report;
+    server->file=fopen("/dev/urandom", "r");
     while(workaholic) {
         if(!SLIST_EMPTY(&server->ReportHead)) {
             SLIST_FOREACH(report, &server->ReportHead, entries) {
@@ -312,6 +309,7 @@ static void prepare_sender(void *arg) {
         }
         sleep(period_ce.u.value);
     }
+    fclose(server->file);
     SLIST_FOREACH(report, &server->ReportHead, entries) {
         pthread_mutex_lock(server->mutex);
         SLIST_FOREACH(packet, &report->PacketHead, entries) {
@@ -368,21 +366,25 @@ static int _output(ulog_iret_t *res)
             packet->pkt.source_port = GET_UDP_SPORT;
             packet->pkt.destination_port = GET_UDP_DPORT;
             break;
+        case IPPROTO_ICMP:
+            packet->pkt.source_port = GET_ICMP_TYPE;
+            packet->pkt.destination_port = GET_ICMP_CODE;
+            break;
     }
 #ifdef DEBUG
-    printf("[%s] %d %s:%d -> %s:%d %d bytes\n",(char *)GET_OOB_PREFIX, packet->pkt.time, 
+    printf("[%s] %d %s:%d -[proto %08x]-> %s:%d %d bytes\n",(char *)GET_OOB_PREFIX, packet->pkt.time, 
+            packet->pkt.protocol,
 		    inet_ntoa((struct in_addr) {packet->pkt.source_ip}), packet->pkt.source_port,
 		    inet_ntoa((struct in_addr) {packet->pkt.destination_ip}), packet->pkt.destination_port,
             packet->pkt.len);
 #endif
-    
+
     SLIST_FOREACH(server, &ServerHead, entries) {
         ptr_packet = malloc(sizeof(struct PacketListEntry));
         memcpy(ptr_packet, packet, sizeof(struct PacketListEntry));
         report = malloc(sizeof(struct ReportListEntry));
         bzero(report, sizeof(struct ReportListEntry));
         pthread_mutex_lock(server->mutex);
-//        snprintf(report->order,sizeof(report->order),"%s",(char *)GET_OOB_PREFIX);
         memcpy(report->order,(char *)GET_OOB_PREFIX,sizeof(report->order));
         ptr_report = tsearch(report, &server->report_root, report_cmp);
         if(*(void **)ptr_report == report) {
