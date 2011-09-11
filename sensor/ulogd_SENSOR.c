@@ -373,10 +373,11 @@ static int _output(ulog_iret_t *res)
     }
 #ifdef DEBUG
     printf("[%s] %d %s:%d -[proto %08x]-> %s:%d %d bytes\n",(char *)GET_OOB_PREFIX, packet->pkt.time, 
-            packet->pkt.protocol,
 		    inet_ntoa((struct in_addr) {packet->pkt.source_ip}), packet->pkt.source_port,
+		    packet->pkt.protocol,
 		    inet_ntoa((struct in_addr) {packet->pkt.destination_ip}), packet->pkt.destination_port,
-            packet->pkt.len);
+		    packet->pkt.len
+	);
 #endif
 
     SLIST_FOREACH(server, &ServerHead, entries) {
