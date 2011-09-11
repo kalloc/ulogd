@@ -131,7 +131,7 @@ static struct intr_id intr_ids[INTR_IDS] = {
 	{ "ahesp.spi", 0 },
 };
 
-#define DEBUG 1
+//#define DEBUG 1
 
 #define GET_VALUE(x)	ulogd_keyh[intr_ids[x].id].interp->result[ulogd_keyh[intr_ids[x].id].offset].value
 #define GET_FLAGS(x)	ulogd_keyh[intr_ids[x].id].interp->result[ulogd_keyh[intr_ids[x].id].offset].flags
@@ -173,7 +173,7 @@ static config_entry_t port_ce = {
 ////////////////////////////////////////////////////////////////
 #pragma pack(push,1)
 struct pkt {
-    time_t time;
+    unsigned time;
     char protocol;
     unsigned source_ip;
     unsigned destination_ip;
@@ -181,12 +181,12 @@ struct pkt {
     unsigned short destination_port;
     int len;
 };
+#pragma pack(pop)
 
 struct PacketListEntry {
     struct pkt pkt;
     SLIST_ENTRY(PacketListEntry) entries; /* List. */
 };
-#pragma pack(pop)
 ////////////////////////////////////////////////////////////////
 //Report
 ////////////////////////////////////////////////////////////////
@@ -351,7 +351,7 @@ static int _output(ulog_iret_t *res)
     struct PacketListEntry *packet = malloc(sizeof(struct PacketListEntry)), *ptr_packet;
     struct Server *server = NULL;
     bzero(packet, sizeof(struct PacketListEntry));  
-    packet->pkt.time  = (time_t) GET_OOB_TIME_SEC;;
+    packet->pkt.time  = (unsigned) GET_OOB_TIME_SEC;;
     packet->pkt.protocol = GET_IP_PROTOCOL;
     packet->pkt.len = GET_IP_TOTLEN;
     packet->pkt.source_ip = htonl(GET_IP_SADDR);
