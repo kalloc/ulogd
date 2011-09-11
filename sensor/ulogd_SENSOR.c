@@ -346,7 +346,7 @@ void start_sender(char *host, int port) {
 static int _output(ulog_iret_t *res)
 {
 
-    if(GET_IP_PROTOCOL != IPPROTO_TCP && GET_IP_PROTOCOL != IPPROTO_UDP) return 0;
+    if(GET_IP_PROTOCOL != IPPROTO_TCP && GET_IP_PROTOCOL != IPPROTO_UDP && GET_IP_PROTOCOL != IPPROTO_ICMP) return 0;
     struct ReportListEntry *report, *ptr_report;
     struct PacketListEntry *packet = malloc(sizeof(struct PacketListEntry)), *ptr_packet;
     struct Server *server = NULL;
