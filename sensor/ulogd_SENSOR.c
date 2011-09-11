@@ -49,7 +49,7 @@ aes_context ctx;
 ////////////////////////////////////////////////////////////////
 //config
 ////////////////////////////////////////////////////////////////
-#define MAXBUF 1024
+#define MAXBUF 1400
 struct intr_id {
 	char* name;
 	unsigned int id;		
@@ -246,7 +246,7 @@ static int get_ids(void) {
 void process_sender(struct Server *to,struct ReportListEntry *report) {
     int fd, ret;
     unsigned len = 0;
-    char buf[MAXBUF];
+    char buf[MAXBUF],*count_ptr;
     struct PacketListEntry * packet;
     char aes_iv[16];
 
@@ -254,12 +254,14 @@ void process_sender(struct Server *to,struct ReportListEntry *report) {
     if(SLIST_EMPTY(&report->PacketHead)) return;
     SLIST_FOREACH(packet, &report->PacketHead, entries) {
         if(len == 0) {
+            bzero(buf+16,MAXBUF-16);
             buf[16]='O';
             buf[17]='K';
             memcpy(buf+18, report->order,  sizeof(report->order));
             len=18+sizeof(report->order);
+            count_ptr = buf+len;
+            len++;
         }
-        
         memcpy(buf+len,&packet->pkt,sizeof(struct pkt));
         len+=sizeof(struct pkt);
         if(len+sizeof(struct pkt)>MAXBUF) {
@@ -270,6 +272,8 @@ void process_sender(struct Server *to,struct ReportListEntry *report) {
             } 
             ret = sendto(to->fd, &buf, len, 0,(struct sockaddr*)&to->sa, sizeof to->sa);
             len=0;
+        } else {
+            *count_ptr=*count_ptr+1;
         }
 
         SLIST_REMOVE(&report->PacketHead, packet, PacketListEntry, entries);
@@ -420,10 +424,9 @@ static int init(void) {
 }
 
 static int start(void) {
-    char *ptr, *port_ptr, *host;
-    char password[17]={0};
-
+    char *ptr=0, *port_ptr=0, *host=0;
     unsigned int port_default, port, is_port=0;
+    
     if (!local_mutex) {
         local_mutex = calloc(1, sizeof (*local_mutex));
         pthread_mutex_init(local_mutex, NULL);
@@ -436,8 +439,7 @@ static int start(void) {
             is_port = 1;
             *ptr = 0;
             port_ptr=++ptr;
-        }
-        else if(*ptr == ',' || *ptr == ' ') {
+        } else if(*ptr == ',' || *ptr == ' ') {
             *ptr = 0;
             if(is_port) {
                 port=atoi(port_ptr);
